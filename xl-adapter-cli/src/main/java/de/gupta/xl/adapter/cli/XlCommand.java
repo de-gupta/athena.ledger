@@ -7,10 +7,14 @@ import de.gupta.xl.application.port.in.XlFacade;
 import de.gupta.xl.application.service.WorkbookService;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Spec;
 
 @Command(name = "xl", mixinStandardHelpOptions = true)
 public final class XlCommand implements Runnable
 {
+	@Spec
+	private CommandLine.Model.CommandSpec specification;
+
 	public static void main(final String[] arguments)
 	{
 		System.exit(buildCommandLine().execute(arguments));
@@ -38,7 +42,7 @@ public final class XlCommand implements Runnable
 	@Override
 	public void run()
 	{
-		CommandLine.usage(this, System.out);
+		specification.commandLine().usage(System.out);
 	}
 
 	private static XlFacade buildFacade()
