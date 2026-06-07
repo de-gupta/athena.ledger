@@ -208,4 +208,16 @@ public final class XlFacadeImpl implements XlFacade
             return null;
         });
     }
+
+    @Override
+    public Fallible<Void> importCsv(final Path xlFile, final String sheet, final Path csvFile,
+                                    final String startCell, final boolean overwrite, final char delimiter)
+    {
+        return Fallible.<Void>beckon(null).map(_ ->
+        {
+            var grid = CsvImporter.toCellGrid(csvFile, delimiter);
+            workbookService.writeRange(new WriteRangeRequest(xlFile, sheet, startCell, grid, overwrite));
+            return null;
+        });
+    }
 }

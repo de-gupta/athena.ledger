@@ -407,6 +407,108 @@ final class CliITCase
 		}
 	}
 
+	@Nested
+	@DisplayName("import-csv")
+	final class ImportCsv
+	{
+		@Test
+		@DisplayName("writes all rows including header to the sheet starting at A1")
+		void writesAllRowsIncludingHeaderToSheetStartingAtA1(@TempDir final Path directory) throws Exception
+		{
+			execute("create", file.toString());
+			var csvFile = directory.resolve("data.csv");
+			java.nio.file.Files.writeString(csvFile, "Name,Score\nAlice,95\nBob,87");
+
+			execute("import-csv", file.toString(), "Sheet1", csvFile.toString());
+
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A1")).isEqualTo("STR:Name");
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "B1")).isEqualTo("STR:Score");
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A2")).isEqualTo("STR:Alice");
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "B2")).isEqualTo("NUM:95.0");
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A3")).isEqualTo("STR:Bob");
+		}
+
+		@Test
+		@DisplayName("writes to a non-default start cell with --start-cell")
+		void writesToNonDefaultStartCellWithStartCellOption(@TempDir final Path directory) throws Exception
+		{
+			execute("create", file.toString());
+			var csvFile = directory.resolve("data.csv");
+			java.nio.file.Files.writeString(csvFile, "X,Y\n1,2");
+
+			execute("import-csv", file.toString(), "Sheet1", csvFile.toString(), "--start-cell", "C3");
+
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "C3")).isEqualTo("STR:X");
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "D3")).isEqualTo("STR:Y");
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "C4")).isEqualTo("NUM:1.0");
+		}
+
+		@Test
+		@DisplayName("preserves existing cells without --overwrite")
+		void preservesExistingCellsWithoutOverwrite(@TempDir final Path directory) throws Exception
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "protected");
+			var csvFile = directory.resolve("data.csv");
+			java.nio.file.Files.writeString(csvFile, "replacement");
+
+			execute("import-csv", file.toString(), "Sheet1", csvFile.toString());
+
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A1")).isEqualTo("STR:protected");
+		}
+
+		@Test
+		@DisplayName("overwrites existing cells with --overwrite")
+		void overwritesExistingCellsWithOverwrite(@TempDir final Path directory) throws Exception
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "old");
+			var csvFile = directory.resolve("data.csv");
+			java.nio.file.Files.writeString(csvFile, "new");
+
+			execute("import-csv", file.toString(), "Sheet1", csvFile.toString(), "--overwrite");
+
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A1")).isEqualTo("STR:new");
+		}
+
+		@Test
+		@DisplayName("handles semicolon-delimited files with --delimiter option")
+		void handlesSemicolonDelimitedFilesWithDelimiterOption(@TempDir final Path directory) throws Exception
+		{
+			execute("create", file.toString());
+			var csvFile = directory.resolve("data.csv");
+			java.nio.file.Files.writeString(csvFile, "Name;Score\nAlice;95");
+
+			execute("import-csv", file.toString(), "Sheet1", csvFile.toString(), "--delimiter", ";");
+
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A1")).isEqualTo("STR:Name");
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "B2")).isEqualTo("NUM:95.0");
+		}
+
+		@Test
+		@DisplayName("exits 0 on success")
+		void exits0OnSuccess(@TempDir final Path directory) throws Exception
+		{
+			execute("create", file.toString());
+			var csvFile = directory.resolve("data.csv");
+			java.nio.file.Files.writeString(csvFile, "a,b\n1,2");
+
+			assertThat(execute("import-csv", file.toString(), "Sheet1", csvFile.toString()))
+					.as("exit code").isZero();
+		}
+
+		@Test
+		@DisplayName("exits 1 when csv file does not exist")
+		void exits1WhenCsvFileDoesNotExist(@TempDir final Path directory)
+		{
+			execute("create", file.toString());
+			var missing = directory.resolve("missing.csv");
+
+			assertThat(execute("import-csv", file.toString(), "Sheet1", missing.toString()))
+					.as("exit code for missing csv").isEqualTo(1);
+		}
+	}
+
 	private int executeWithStdin(final String stdinContent, final String... arguments)
 	{
 		var originalIn = System.in;

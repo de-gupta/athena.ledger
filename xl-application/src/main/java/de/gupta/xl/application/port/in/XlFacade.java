@@ -53,4 +53,7 @@ public interface XlFacade
 	Fallible<Void> autoFitColumn(Path file, String sheet, String columnRef);
 
 	Fallible<Void> autoFitAllColumns(Path file, String sheet);
+
+	Fallible<Void> importCsv(Path xlFile, String sheet, Path csvFile,
+	                         String startCell, boolean overwrite, char delimiter);
 }

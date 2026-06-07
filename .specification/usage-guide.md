@@ -23,6 +23,39 @@ xl <command> <file> [args...] [options]
 
 Exit codes: `0` = success, `1` = error (message on stderr).
 
+**Cell references** — A1 notation, case-insensitive (`A1`, `bc42`, `ZZ99`).  
+**Column references** — letter (`A`, `AA`) or 1-based integer (`1`, `27`).  
+**Row references** — 1-based integer only (`1`, `42`).  
+**Type tokens** — `STR` `NUM` `BOOL` `DATE` `FORMULA` `EMPTY`.  
+**Type inference** (used by `write`, `write-range`, `import-csv`) — `true`/`false` → `BOOL`; `YYYY-MM-DD` → `DATE`;
+numeric → `NUM`; anything else → `STR`. For `FORMULA`, leading `=` is optional.
+
+### Command summary
+
+| Command                                                                                   | Purpose                                                     |
+|-------------------------------------------------------------------------------------------|-------------------------------------------------------------|
+| `xl sheets <file>`                                                                        | list sheets with row counts                                 |
+| `xl read <file> <sheet> <cell>`                                                           | read one cell → `TYPE:value`                                |
+| `xl write <file> <sheet> <cell> <value> [--type TYPE]`                                    | write one cell                                              |
+| `xl read-range <file> <sheet> <from> <to> [--typed]`                                      | read rectangular range → TSV                                |
+| `xl write-range <file> <sheet> <start-cell> [--overwrite]`                                | write TSV from stdin                                        |
+| `xl read-row <file> <sheet> <row> [--typed]`                                              | read entire row → single TSV line                           |
+| `xl read-col <file> <sheet> <col> [--typed]`                                              | read entire column → one value per line                     |
+| `xl evaluate <file> <sheet> <cell>`                                                       | read computed value; evaluates formula cells → `TYPE:value` |
+| `xl import-csv <file> <sheet> <csv-file> [--start-cell A1] [--overwrite] [--delimiter ,]` | import CSV file into sheet                                  |
+| `xl create <file> [--overwrite]`                                                          | create new workbook                                         |
+| `xl add-sheet <file> <name>`                                                              | add blank sheet                                             |
+| `xl rename-sheet <file> <name> <new-name>`                                                | rename sheet in place                                       |
+| `xl delete-sheet <file> <name>`                                                           | delete sheet (fails if last)                                |
+| `xl copy-sheet <file> <source> <new-name>`                                                | copy sheet within workbook                                  |
+| `xl move-sheet <file> <name> <position>`                                                  | reorder sheet (0-based position)                            |
+| `xl insert-row <file> <sheet> <row>`                                                      | insert blank row, shift down                                |
+| `xl delete-row <file> <sheet> <row>`                                                      | delete row, shift up                                        |
+| `xl delete-column <file> <sheet> <col>`                                                   | delete column, shift left                                   |
+| `xl set-col-width <file> <sheet> <col> <width>`                                           | set column width in character units                         |
+| `xl auto-fit <file> <sheet> [<col>]`                                                      | auto-fit one or all columns                                 |
+| `xl tab-color <file> <sheet> <hex-rgb>`                                                   | set sheet tab color                                         |
+
 ---
 
 ### `xl sheets <file>`
@@ -151,7 +184,7 @@ xl delete-sheet report.xlsx "Draft"
 
 ---
 
-### `xl read-range <file> <sheet> <from> <to>`
+### `xl read-range <file> <sheet> <from> <to> [--typed]`
 
 Read a rectangular range of cells and print as TSV (tab-separated values). Each row is a line; columns are separated by
 tabs. Empty cells produce empty fields.
@@ -376,6 +409,34 @@ xl auto-fit report.xlsx Sheet1 2        # fit column 2 (B) only
 ```
 
 **Errors:** file not found, sheet not found.
+
+---
+
+### `xl import-csv <file> <sheet> <csv-file> [options]`
+
+Import a CSV file into a sheet. All rows — including the header row — are written to Excel. Type inference is applied to
+each cell using the same rules as `xl write`.
+
+```
+xl import-csv report.xlsx Sheet1 data.csv
+xl import-csv report.xlsx Sheet1 data.csv --start-cell B2
+xl import-csv report.xlsx Sheet1 data.csv --overwrite
+xl import-csv report.xlsx Sheet1 european.csv --delimiter ";"
+xl import-csv report.xlsx Sheet1 data.tsv --delimiter "\t"
+```
+
+**Options:**
+
+| Option         | Default | Description                                                                  |
+|----------------|---------|------------------------------------------------------------------------------|
+| `--start-cell` | `A1`    | Top-left cell to begin writing                                               |
+| `--overwrite`  | false   | Replace existing non-empty cells; without this, only empty cells are written |
+| `--delimiter`  | `,`     | Field separator character; use `;` for European CSVs, `\t` for TSV           |
+
+**Input format:** standard RFC 4180 CSV — quoted fields (with `""` escaping for embedded quotes), `\r\n` or `\n` line
+endings. Blank lines are skipped.
+
+**Errors:** CSV file not found, invalid start cell, invalid Excel file path.
 
 ---
 
@@ -886,6 +947,36 @@ Fallible<Void> autoFitAllColumns(Path file, String sheet)
 Auto-size one or all columns to fit their content.
 
 **Failures:** `WorkbookNotFoundException`, `SheetNotFoundException`.
+
+---
+
+#### `importCsv`
+
+```java
+Fallible<Void> importCsv(Path xlFile, String sheet, Path csvFile,
+                         String startCell, boolean overwrite, char delimiter)
+```
+
+Parse a CSV file and write it to a sheet as a `CellGrid`, starting at `startCell`. Internally converts the CSV rows to a
+`CellGrid` with type inference, then delegates to `writeRange`. No new repository method is involved.
+
+```java
+xl.importCsv(
+		Path.of("report.xlsx"),
+    "Sheet1",
+			Path.
+
+of("data.csv"),
+    "A1",
+			true,   // overwrite existing content
+			','     // comma delimiter
+			);
+```
+
+Common delimiter values: `','` (standard CSV), `';'` (European CSV), `'\t'` (TSV).
+
+**Failures:** `UncheckedIOException` (CSV file unreadable), `WorkbookNotFoundException`, `IllegalArgumentException` (
+invalid start cell).
 
 ---
 
