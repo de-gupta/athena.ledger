@@ -278,4 +278,32 @@ public final class XlFacadeImpl implements XlFacade
 		});
 	}
 
+
+	@Override
+	public Fallible<Integer> findRow(final Path file, final String sheet,
+	                                 final String columnRef, final String value)
+	{
+		return Fallible.<Void>beckon(null).map(_ -> workbookService.findRow(file, sheet, columnRef, value));
+	}
+
+	@Override
+	public Fallible<String> dims(final Path file, final String sheet)
+	{
+		return Fallible.<Void>beckon(null).map(_ -> workbookService.dims(file, sheet));
+	}
+
+	@Override
+	public Fallible<Void> exportCsv(final Path xlFile, final String sheet,
+	                                final Path csvFile, final char delimiter)
+	{
+		return Fallible.<Void>beckon(null).map(_ ->
+		{
+			var dimsString = workbookService.dims(xlFile, sheet);
+			var parts = dimsString.split(":");
+			var grid = workbookService.readRange(xlFile, sheet, parts[0], parts[1]);
+			CsvExporter.write(grid, csvFile, delimiter);
+			return null;
+		});
+	}
+
 }

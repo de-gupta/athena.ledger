@@ -635,6 +635,153 @@ final class CliITCase
 		}
 	}
 
+	@Nested
+	@DisplayName("find-row")
+	final class FindRow
+	{
+		@Test
+		@DisplayName("outputs 1-based row number of matching value")
+		void outputs1BasedRowNumberOfMatchingValue()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "100");
+			execute("write", file.toString(), "Sheet1", "A2", "200");
+			execute("write", file.toString(), "Sheet1", "A3", "900");
+
+			var output = captureOutput("find-row", file.toString(), "Sheet1", "A", "900");
+
+			assertThat(output).as("row number").isEqualTo("3");
+		}
+
+		@Test
+		@DisplayName("matches numbers by plain decimal representation")
+		void matchesNumbersByPlainDecimalRepresentation()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "42.5");
+
+			var output = captureOutput("find-row", file.toString(), "Sheet1", "A", "42.5");
+
+			assertThat(output).as("fractional number row").isEqualTo("1");
+		}
+
+		@Test
+		@DisplayName("exits 1 when value is not found")
+		void exits1WhenValueIsNotFound()
+		{
+			execute("create", file.toString());
+
+			assertThat(execute("find-row", file.toString(), "Sheet1", "A", "missing"))
+					.as("exit code").isEqualTo(1);
+		}
+	}
+
+	@Nested
+	@DisplayName("dims")
+	final class DimsCommand
+	{
+		@Test
+		@DisplayName("outputs A1:CN notation for populated range")
+		void outputsA1ColonNotationForPopulatedRange()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "B2", "tl");
+			execute("write", file.toString(), "Sheet1", "D4", "br");
+
+			var output = captureOutput("dims", file.toString(), "Sheet1");
+
+			assertThat(output).as("dims output").isEqualTo("B2:D4");
+		}
+
+		@Test
+		@DisplayName("exits 0 for a single-cell populated sheet")
+		void exits0ForSingleCellPopulatedSheet()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "C3", "data");
+
+			assertThat(execute("dims", file.toString(), "Sheet1")).as("exit code").isZero();
+			assertThat(captureOutput("dims", file.toString(), "Sheet1")).isEqualTo("C3:C3");
+		}
+
+		@Test
+		@DisplayName("exits 1 for an empty sheet")
+		void exits1ForAnEmptySheet()
+		{
+			execute("create", file.toString());
+
+			assertThat(execute("dims", file.toString(), "Sheet1")).as("exit code").isEqualTo(1);
+		}
+	}
+
+	@Nested
+	@DisplayName("export-csv")
+	final class ExportCsv
+	{
+		@Test
+		@DisplayName("exports sheet data to a CSV file")
+		void exportsSheetDataToACsvFile(@TempDir final Path directory) throws Exception
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "Name");
+			execute("write", file.toString(), "Sheet1", "B1", "Score");
+			execute("write", file.toString(), "Sheet1", "A2", "Alice");
+			execute("write", file.toString(), "Sheet1", "B2", "95");
+			var csvFile = directory.resolve("out.csv");
+
+			execute("export-csv", file.toString(), "Sheet1", csvFile.toString());
+
+			var lines = java.nio.file.Files.readAllLines(csvFile);
+			assertThat(lines.get(0)).as("header row").startsWith("Name,Score");
+			assertThat(lines.get(1)).as("data row").startsWith("Alice,95");
+		}
+
+		@Test
+		@DisplayName("round-trips with import-csv")
+		void roundTripsWithImportCsv(@TempDir final Path directory) throws Exception
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "Name");
+			execute("write", file.toString(), "Sheet1", "B1", "Score");
+			execute("write", file.toString(), "Sheet1", "A2", "Alice");
+			execute("write", file.toString(), "Sheet1", "B2", "95");
+			var csvFile = directory.resolve("out.csv");
+			var destination = directory.resolve("dest.xlsx");
+			execute("create", destination.toString());
+
+			execute("export-csv", file.toString(), "Sheet1", csvFile.toString());
+			execute("import-csv", destination.toString(), "Sheet1", csvFile.toString(), "--overwrite");
+
+			assertThat(captureOutput("read", destination.toString(), "Sheet1", "A1")).isEqualTo("STR:Name");
+			assertThat(captureOutput("read", destination.toString(), "Sheet1", "B2")).isEqualTo("NUM:95.0");
+		}
+
+		@Test
+		@DisplayName("exits 1 for empty sheet")
+		void exits1ForEmptySheet(@TempDir final Path directory)
+		{
+			execute("create", file.toString());
+			var csvFile = directory.resolve("out.csv");
+
+			assertThat(execute("export-csv", file.toString(), "Sheet1", csvFile.toString()))
+					.as("exit code for empty sheet").isEqualTo(1);
+		}
+
+		@Test
+		@DisplayName("handles quoted fields with commas correctly")
+		void handlesQuotedFieldsWithCommasCorrectly(@TempDir final Path directory) throws Exception
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "Smith, John");
+			var csvFile = directory.resolve("out.csv");
+
+			execute("export-csv", file.toString(), "Sheet1", csvFile.toString());
+
+			var content = java.nio.file.Files.readString(csvFile);
+			assertThat(content).as("quoted field").contains("\"Smith, John\"");
+		}
+	}
+
 	private int executeWithStdin(final String stdinContent, final String... arguments)
 	{
 		var originalIn = System.in;

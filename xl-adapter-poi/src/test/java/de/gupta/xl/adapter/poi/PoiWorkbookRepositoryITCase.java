@@ -1,6 +1,7 @@
 package de.gupta.xl.adapter.poi;
 
 import de.gupta.xl.domain.*;
+import de.gupta.xl.domain.exception.EmptySheetException;
 import de.gupta.xl.domain.exception.WorkbookNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -650,6 +651,69 @@ final class PoiWorkbookRepositoryITCase
 					.as("A1 unchanged").isEqualTo(new CellValue.Str("existing"));
 			assertThat(repository.readCell(file, "Sheet1", CellReference.of("B1")))
 					.as("B1 has appended value").isEqualTo(new CellValue.Str("appended"));
+		}
+	}
+
+	@Nested
+	@DisplayName("findRow")
+	final class FindRow
+	{
+		@Test
+		@DisplayName("returns 0-based row index of the matching value")
+		void returns0BasedRowIndexOfTheMatchingValue(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("A1"), new CellValue.Str("alpha"));
+			repository.writeCell(file, "Sheet1", CellReference.of("A2"), new CellValue.Num(900));
+			repository.writeCell(file, "Sheet1", CellReference.of("A3"), new CellValue.Str("gamma"));
+
+			assertThat(repository.findRow(file, "Sheet1", ColumnReference.of("A"), "900"))
+					.as("row index for numeric 900").isEqualTo(1);
+			assertThat(repository.findRow(file, "Sheet1", ColumnReference.of("A"), "gamma"))
+					.as("row index for string").isEqualTo(2);
+		}
+
+		@Test
+		@DisplayName("returns -1 when value is not found")
+		void returnsMinus1WhenValueIsNotFound(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+
+			assertThat(repository.findRow(file, "Sheet1", ColumnReference.of("A"), "missing"))
+					.as("not found").isEqualTo(-1);
+		}
+	}
+
+	@Nested
+	@DisplayName("dims")
+	final class Dims
+	{
+		@Test
+		@DisplayName("returns the bounding range of occupied cells")
+		void returnsTheBoundingRangeOfOccupiedCells(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("B2"), new CellValue.Str("tl"));
+			repository.writeCell(file, "Sheet1", CellReference.of("D4"), new CellValue.Str("br"));
+
+			var range = repository.dims(file, "Sheet1");
+
+			assertThat(range.topLeft()).as("top-left").isEqualTo(CellReference.of(1, 1));
+			assertThat(range.bottomRight()).as("bottom-right").isEqualTo(CellReference.of(3, 3));
+		}
+
+		@Test
+		@DisplayName("throws EmptySheetException when sheet has no data")
+		void throwsEmptySheetExceptionWhenSheetHasNoData(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+
+			assertThatThrownBy(() -> repository.dims(file, "Sheet1"))
+					.isInstanceOf(EmptySheetException.class);
 		}
 	}
 }

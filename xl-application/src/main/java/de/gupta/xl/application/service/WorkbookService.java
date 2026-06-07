@@ -284,6 +284,33 @@ public final class WorkbookService
         repository.appendColumn(file, sheet, values);
     }
 
+
+    public int findRow(final Path file, final String sheet, final String columnRef, final String value)
+    {
+        StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+        StringSanitizationUtility.requireNotBlank(columnRef, "Column reference must not be blank");
+        StringSanitizationUtility.requireNotBlank(value, "Search value must not be blank");
+        requireSheetExists(file, sheet);
+        var rowIndex = repository.findRow(file, sheet, ColumnReference.of(columnRef), value);
+        if (rowIndex < 0)
+        {
+            throw RowNotFoundException.forValue(value);
+        }
+        return rowIndex + 1;
+    }
+
+    public String dims(final Path file, final String sheet)
+    {
+        StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+        requireSheetExists(file, sheet);
+        var range = repository.dims(file, sheet);
+        return ColumnReference.toLetters(range.topLeft().columnIndex())
+                + (range.topLeft().rowIndex() + 1)
+                + ":"
+                + ColumnReference.toLetters(range.bottomRight().columnIndex())
+                + (range.bottomRight().rowIndex() + 1);
+    }
+
     private void requireSheetExists(final Path file, final String sheet)
     {
         var sheetExists = repository.load(file).sheets().stream()

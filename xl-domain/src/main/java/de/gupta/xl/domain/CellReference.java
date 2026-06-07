@@ -10,6 +10,11 @@ public final class CellReference
 	private final int columnIndex;
 	private final int rowIndex;
 
+	public static CellReference of(final int columnIndex, final int rowIndex)
+	{
+		return new CellReference(columnIndex, rowIndex);
+	}
+
 	public static CellReference of(final String notation)
 	{
 		if (notation == null || notation.isBlank())

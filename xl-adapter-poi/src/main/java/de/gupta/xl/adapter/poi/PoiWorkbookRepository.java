@@ -2,6 +2,7 @@ package de.gupta.xl.adapter.poi;
 
 import de.gupta.xl.application.port.out.WorkbookRepository;
 import de.gupta.xl.domain.*;
+import de.gupta.xl.domain.exception.EmptySheetException;
 import de.gupta.xl.domain.exception.WorkbookNotFoundException;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -625,6 +626,103 @@ public final class PoiWorkbookRepository implements WorkbookRepository
 			}
 			writeColumnValues(workbook, poiSheet, lastColumn + 1, values);
 		});
+	}
+
+	@Override
+	public int findRow(final Path file, final String sheet,
+	                   final ColumnReference reference, final String displayValue)
+	{
+		requireExists(file);
+		try (var inputStream = Files.newInputStream(file);
+		     var workbook = new XSSFWorkbook(inputStream))
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return -1;
+			}
+			for (var rowIndex = 0; rowIndex <= poiSheet.getLastRowNum(); rowIndex++)
+			{
+				var row = poiSheet.getRow(rowIndex);
+				if (row == null)
+				{
+					continue;
+				}
+				var cell = row.getCell(reference.index());
+				if (cell != null && displayValue.equals(toCellValue(cell).displayValue()))
+				{
+					return rowIndex;
+				}
+			}
+			return -1;
+		}
+		catch (IOException caught)
+		{
+			log.error("Failed to search column in workbook: {}", file, caught);
+			throw new IllegalStateException("Failed to search column in workbook: " + file, caught);
+		}
+	}
+
+	@Override
+	public CellRangeReference dims(final Path file, final String sheet)
+	{
+		requireExists(file);
+		try (var inputStream = Files.newInputStream(file);
+		     var workbook = new XSSFWorkbook(inputStream))
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				throw EmptySheetException.forSheet(sheet);
+			}
+			var minRow = Integer.MAX_VALUE;
+			var maxRow = -1;
+			var minCol = Integer.MAX_VALUE;
+			var maxCol = -1;
+			for (var rowIndex = 0; rowIndex <= poiSheet.getLastRowNum(); rowIndex++)
+			{
+				var row = poiSheet.getRow(rowIndex);
+				if (row == null)
+				{
+					continue;
+				}
+				for (var colIndex = row.getFirstCellNum(); colIndex < row.getLastCellNum(); colIndex++)
+				{
+					var cell = row.getCell(colIndex);
+					if (cell != null && cell.getCellType() != CellType.BLANK)
+					{
+						if (rowIndex < minRow)
+						{
+							minRow = rowIndex;
+						}
+						if (rowIndex > maxRow)
+						{
+							maxRow = rowIndex;
+						}
+						if (colIndex < minCol)
+						{
+							minCol = colIndex;
+						}
+						if (colIndex > maxCol)
+						{
+							maxCol = colIndex;
+						}
+					}
+				}
+			}
+			if (maxRow == -1)
+			{
+				throw EmptySheetException.forSheet(sheet);
+			}
+			return CellRangeReference.of(
+					CellReference.of(minCol, minRow),
+					CellReference.of(maxCol, maxRow));
+		}
+		catch (IOException caught)
+		{
+			log.error("Failed to compute dims for workbook: {}", file, caught);
+			throw new IllegalStateException("Failed to compute dims for workbook: " + file, caught);
+		}
 	}
 
 	private void writeColumnValues(final XSSFWorkbook workbook,

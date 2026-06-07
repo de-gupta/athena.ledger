@@ -523,6 +523,68 @@ awk "BEGIN { exit !($min >= 0.05 && $max <= 2.0) }" && echo "OK" || echo "Out of
 
 ---
 
+### `xl find-row <file> <sheet> <col> <value>`
+
+Find the 1-based row number of the first cell in a column that matches a value. Output is a bare integer with no
+trailing newline — clean for use in `$(...)`. Complement to `find-col`.
+
+```bash
+xl find-row vol-surface.xlsx MU A 900
+# → 4
+
+row=$(xl find-row vol-surface.xlsx MU A 900)
+xl read-row vol-surface.xlsx MU $row          # read that strike's full vol curve
+xl write vol-surface.xlsx MU B$row 0.4050     # update a single vol
+```
+
+**Matching:** uses the plain display value (same as `read-range` plain mode, no `TYPE:` prefix). Numbers match without
+trailing `.0` where possible (`900` matches a cell containing `NUM:900`).
+
+**Errors:** file not found, sheet not found, invalid column reference, value not found.
+
+---
+
+### `xl dims <file> <sheet>`
+
+Print the populated range of a sheet as `FROM:TO` (e.g. `A1:E7`). No trailing newline — clean for shell variable
+assignment. Useful for avoiding hardcoded range bounds in scripts.
+
+```bash
+xl dims vol-surface.xlsx AAPL
+# → A1:E7
+
+range=$(xl dims vol-surface.xlsx MU)
+xl read-range vol-surface.xlsx MU $range               # full surface as TSV
+xl read-range vol-surface.xlsx MU $range | xl write-range dst.xlsx MU A1 --overwrite
+```
+
+Empty sheets produce an error, not a degenerate range.
+
+**Errors:** file not found, sheet not found, sheet is empty.
+
+---
+
+### `xl export-csv <file> <sheet> <csv-file> [--delimiter ,]`
+
+Export a full sheet to a CSV file. Inverse of `import-csv`. Sheet bounds are discovered automatically via `dims`. RFC
+4180 quoting is applied to fields containing the delimiter, double-quotes, or newlines.
+
+```bash
+xl export-csv vol-surface.xlsx MU MU-vol-surface.csv
+xl export-csv vol-surface.xlsx MU MU-vol-surface.csv --delimiter ;
+```
+
+Cell values are written as their plain display strings (no `TYPE:` prefix). The `--delimiter` option matches
+`import-csv`.
+
+**Round-trip:** `export-csv` followed by `import-csv` is lossless for strings, numbers, and booleans. Date cells export
+as `YYYY-MM-DD` and re-infer as `DATE` on import. Formula cells export their last computed string value — the formula
+expression is lost.
+
+**Errors:** file not found, sheet not found, sheet is empty, output file not writable.
+
+---
+
 ## Java API
 
 ### Dependency

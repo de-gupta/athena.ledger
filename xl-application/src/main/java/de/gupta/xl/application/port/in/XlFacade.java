@@ -65,4 +65,10 @@ public interface XlFacade
 	Fallible<Void> appendColumn(Path file, String sheet, List<CellValue> values);
 
 	Fallible<RangeStats> rangeStats(Path file, String sheet, String fromCell, String toCell);
+
+	Fallible<Integer> findRow(Path file, String sheet, String columnRef, String value);
+
+	Fallible<String> dims(Path file, String sheet);
+
+	Fallible<Void> exportCsv(Path xlFile, String sheet, Path csvFile, char delimiter);
 }

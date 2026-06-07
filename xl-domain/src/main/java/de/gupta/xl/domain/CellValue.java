@@ -38,6 +38,21 @@ public sealed interface CellValue
 		return new Str(raw);
 	}
 
+	default String displayValue()
+	{
+		return switch (this)
+		{
+			case Str(var string) -> string;
+			case Num(var number) -> number % 1 == 0
+					? String.valueOf((long) number)
+					: String.valueOf(number);
+			case Bool(var bool) -> String.valueOf(bool);
+			case Date(var date) -> date.toString();
+			case Formula(var expression) -> expression;
+			case Empty() -> "";
+		};
+	}
+
 	record Str(String value) implements CellValue
 	{
 	}

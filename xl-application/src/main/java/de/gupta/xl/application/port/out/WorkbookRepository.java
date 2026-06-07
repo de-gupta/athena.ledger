@@ -55,4 +55,8 @@ public interface WorkbookRepository
 	void insertColumn(Path file, String sheet, ColumnReference reference, List<CellValue> values);
 
 	void appendColumn(Path file, String sheet, List<CellValue> values);
+
+	int findRow(Path file, String sheet, ColumnReference reference, String displayValue);
+
+	CellRangeReference dims(Path file, String sheet);
 }
