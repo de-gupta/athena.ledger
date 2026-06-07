@@ -1,6 +1,7 @@
 package de.gupta.xl.application.port.in;
 
 import de.gupta.aletheia.trials.Fallible;
+import de.gupta.xl.application.transfer.RangeStats;
 import de.gupta.xl.application.transfer.SheetSummary;
 import de.gupta.xl.application.transfer.WriteCellRequest;
 import de.gupta.xl.application.transfer.WriteRangeRequest;
@@ -56,4 +57,12 @@ public interface XlFacade
 
 	Fallible<Void> importCsv(Path xlFile, String sheet, Path csvFile,
 	                         String startCell, boolean overwrite, char delimiter);
+
+	Fallible<String> findColumn(Path file, String sheet, String header);
+
+	Fallible<Void> insertColumn(Path file, String sheet, String columnRef, List<CellValue> values);
+
+	Fallible<Void> appendColumn(Path file, String sheet, List<CellValue> values);
+
+	Fallible<RangeStats> rangeStats(Path file, String sheet, String fromCell, String toCell);
 }

@@ -509,6 +509,132 @@ final class CliITCase
 		}
 	}
 
+	@Nested
+	@DisplayName("find-col")
+	final class FindCol
+	{
+		@Test
+		@DisplayName("outputs the column letter of the matching header")
+		void outputsTheColumnLetterOfTheMatchingHeader()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "Name");
+			execute("write", file.toString(), "Sheet1", "B1", "Score");
+			execute("write", file.toString(), "Sheet1", "C1", "Grade");
+
+			var output = captureOutput("find-col", file.toString(), "Sheet1", "Score");
+
+			assertThat(output).as("column letter for Score").isEqualTo("B");
+		}
+
+		@Test
+		@DisplayName("exits 1 when header is not found")
+		void exits1WhenHeaderIsNotFound()
+		{
+			execute("create", file.toString());
+
+			assertThat(execute("find-col", file.toString(), "Sheet1", "Missing"))
+					.as("exit code").isEqualTo(1);
+		}
+	}
+
+	@Nested
+	@DisplayName("insert-col and append-col")
+	final class ColumnOperations
+	{
+		@Test
+		@DisplayName("insert-col shifts existing data right")
+		void insertColShiftsExistingDataRight()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "Name");
+			execute("write", file.toString(), "Sheet1", "B1", "Score");
+			executeWithStdin("Rank\n1\n2", "insert-col", file.toString(), "Sheet1", "B");
+
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "B1"))
+					.as("B1 has new header").isEqualTo("STR:Rank");
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "C1"))
+					.as("Score shifted to C").isEqualTo("STR:Score");
+		}
+
+		@Test
+		@DisplayName("append-col writes after the last column")
+		void appendColWritesAfterTheLastColumn()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "X");
+			execute("write", file.toString(), "Sheet1", "B1", "Y");
+			executeWithStdin("Z", "append-col", file.toString(), "Sheet1");
+
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "C1"))
+					.as("C1 has appended value").isEqualTo("STR:Z");
+		}
+
+		@Test
+		@DisplayName("find-col then insert-col pipe pattern works")
+		void findColThenInsertColPipePatternWorks()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "Name");
+			execute("write", file.toString(), "Sheet1", "B1", "Score");
+
+			var column = captureOutput("find-col", file.toString(), "Sheet1", "Score");
+			executeWithStdin("Rank", "insert-col", file.toString(), "Sheet1", column);
+
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "B1"))
+					.as("Rank inserted at B").isEqualTo("STR:Rank");
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "C1"))
+					.as("Score shifted to C").isEqualTo("STR:Score");
+		}
+	}
+
+	@Nested
+	@DisplayName("stats")
+	final class Stats
+	{
+		@Test
+		@DisplayName("outputs correct statistics for a numeric range")
+		void outputsCorrectStatisticsForANumericRange()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "10");
+			execute("write", file.toString(), "Sheet1", "A2", "20");
+			execute("write", file.toString(), "Sheet1", "A3", "30");
+
+			var output = captureOutput("stats", file.toString(), "Sheet1", "A1", "A3");
+			var lines = output.lines().toList();
+
+			assertThat(lines).as("output lines").anySatisfy(l -> assertThat(l).startsWith("count:3"));
+			assertThat(lines).as("numeric count").anySatisfy(l -> assertThat(l).startsWith("numeric:3"));
+			assertThat(lines).as("non-numeric").anySatisfy(l -> assertThat(l).startsWith("non-numeric:0"));
+			assertThat(lines).as("mean").anySatisfy(l -> assertThat(l).startsWith("mean:20"));
+		}
+
+		@Test
+		@DisplayName("omits min/max/mean/stdev when range has no numeric cells")
+		void omitsNumericFieldsWhenRangeHasNoNumericCells()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "hello");
+
+			var output = captureOutput("stats", file.toString(), "Sheet1", "A1", "A1");
+
+			assertThat(output).as("no min field").doesNotContain("min:");
+			assertThat(output).as("non-numeric count").contains("non-numeric:1");
+		}
+
+		@Test
+		@DisplayName("exits 0 on success")
+		void exits0OnSuccess()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "42");
+
+			assertThat(execute("stats", file.toString(), "Sheet1", "A1", "A1"))
+					.as("exit code").isZero();
+		}
+	}
+
 	private int executeWithStdin(final String stdinContent, final String... arguments)
 	{
 		var originalIn = System.in;

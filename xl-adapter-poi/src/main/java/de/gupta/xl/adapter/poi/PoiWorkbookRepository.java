@@ -551,6 +551,97 @@ public final class PoiWorkbookRepository implements WorkbookRepository
 		});
 	}
 
+	@Override
+	public int findColumn(final Path file, final String sheet, final String header)
+	{
+		requireExists(file);
+		try (var inputStream = Files.newInputStream(file);
+		     var workbook = new XSSFWorkbook(inputStream))
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return -1;
+			}
+			var firstRow = poiSheet.getRow(0);
+			if (firstRow == null)
+			{
+				return -1;
+			}
+			for (var columnIndex = 0; columnIndex < firstRow.getLastCellNum(); columnIndex++)
+			{
+				var cell = firstRow.getCell(columnIndex);
+				if (cell != null
+						&& cell.getCellType() == CellType.STRING
+						&& header.equals(cell.getStringCellValue()))
+				{
+					return columnIndex;
+				}
+			}
+			return -1;
+		}
+		catch (IOException caught)
+		{
+			log.error("Failed to search header in workbook: {}", file, caught);
+			throw new IllegalStateException("Failed to search header in workbook: " + file, caught);
+		}
+	}
+
+	@Override
+	public void insertColumn(final Path file, final String sheet,
+	                         final ColumnReference reference, final List<CellValue> values)
+	{
+		modifyWorkbook(file, workbook ->
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return;
+			}
+			poiSheet.shiftColumns(reference.index(),
+					org.apache.poi.ss.SpreadsheetVersion.EXCEL2007.getLastColumnIndex(), 1);
+			writeColumnValues(workbook, poiSheet, reference.index(), values);
+		});
+	}
+
+	@Override
+	public void appendColumn(final Path file, final String sheet, final List<CellValue> values)
+	{
+		modifyWorkbook(file, workbook ->
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return;
+			}
+			var lastColumn = -1;
+			for (var rowIndex = 0; rowIndex <= poiSheet.getLastRowNum(); rowIndex++)
+			{
+				var row = poiSheet.getRow(rowIndex);
+				if (row != null && row.getLastCellNum() - 1 > lastColumn)
+				{
+					lastColumn = row.getLastCellNum() - 1;
+				}
+			}
+			writeColumnValues(workbook, poiSheet, lastColumn + 1, values);
+		});
+	}
+
+	private void writeColumnValues(final XSSFWorkbook workbook,
+	                               final org.apache.poi.xssf.usermodel.XSSFSheet poiSheet,
+	                               final int columnIndex, final List<CellValue> values)
+	{
+		for (var rowOffset = 0; rowOffset < values.size(); rowOffset++)
+		{
+			final var rowIndex = rowOffset;
+			var row = Objects.requireNonNullElseGet(
+					poiSheet.getRow(rowIndex), () -> poiSheet.createRow(rowIndex));
+			var cell = Objects.requireNonNullElseGet(
+					row.getCell(columnIndex), () -> row.createCell(columnIndex));
+			applyCellValue(workbook, cell, values.get(rowOffset));
+		}
+	}
+
 	@FunctionalInterface
 	private interface WorkbookModification
 	{

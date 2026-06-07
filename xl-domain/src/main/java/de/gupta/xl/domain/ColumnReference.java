@@ -29,6 +29,19 @@ public final class ColumnReference
 		return new ColumnReference(parseLetters(trimmed.toUpperCase()));
 	}
 
+	public static String toLetters(final int index)
+	{
+		var result = new StringBuilder();
+		var remaining = index + 1;
+		while (remaining > 0)
+		{
+			remaining--;
+			result.insert(0, (char) ('A' + remaining % 26));
+			remaining /= 26;
+		}
+		return result.toString();
+	}
+
 	static int parseLetters(final String upperCaseLetters)
 	{
 		var columnIndex = 0;

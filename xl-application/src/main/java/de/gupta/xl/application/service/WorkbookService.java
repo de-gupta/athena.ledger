@@ -6,10 +6,7 @@ import de.gupta.xl.application.transfer.SheetSummary;
 import de.gupta.xl.application.transfer.WriteCellRequest;
 import de.gupta.xl.application.transfer.WriteRangeRequest;
 import de.gupta.xl.domain.*;
-import de.gupta.xl.domain.exception.LastSheetException;
-import de.gupta.xl.domain.exception.SheetAlreadyExistsException;
-import de.gupta.xl.domain.exception.SheetNotFoundException;
-import de.gupta.xl.domain.exception.WorkbookAlreadyExistsException;
+import de.gupta.xl.domain.exception.*;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -254,6 +251,37 @@ public final class WorkbookService
         StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
         requireSheetExists(file, sheet);
         repository.autoFitAllColumns(file, sheet);
+    }
+
+
+    public String findColumn(final Path file, final String sheet, final String header)
+    {
+        StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+        StringSanitizationUtility.requireNotBlank(header, "Header must not be blank");
+        requireSheetExists(file, sheet);
+        var columnIndex = repository.findColumn(file, sheet, header);
+        if (columnIndex < 0)
+        {
+            throw ColumnNotFoundException.forHeader(header);
+        }
+        return ColumnReference.toLetters(columnIndex);
+    }
+
+    public void insertColumn(final Path file, final String sheet,
+                             final String columnRef, final List<CellValue> values)
+    {
+        StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+        StringSanitizationUtility.requireNotBlank(columnRef, "Column reference must not be blank");
+        var parsedColumn = ColumnReference.of(columnRef);
+        requireSheetExists(file, sheet);
+        repository.insertColumn(file, sheet, parsedColumn, values);
+    }
+
+    public void appendColumn(final Path file, final String sheet, final List<CellValue> values)
+    {
+        StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+        requireSheetExists(file, sheet);
+        repository.appendColumn(file, sheet, values);
     }
 
     private void requireSheetExists(final Path file, final String sheet)

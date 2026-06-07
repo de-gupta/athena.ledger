@@ -49,4 +49,10 @@ public interface WorkbookRepository
 	void autoFitColumn(Path file, String sheet, ColumnReference reference);
 
 	void autoFitAllColumns(Path file, String sheet);
+
+	int findColumn(Path file, String sheet, String header);
+
+	void insertColumn(Path file, String sheet, ColumnReference reference, List<CellValue> values);
+
+	void appendColumn(Path file, String sheet, List<CellValue> values);
 }

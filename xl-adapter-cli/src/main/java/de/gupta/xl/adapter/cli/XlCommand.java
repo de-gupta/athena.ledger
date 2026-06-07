@@ -44,7 +44,11 @@ public final class XlCommand implements Runnable
 				.addSubcommand(new DeleteRowCommand(facade))
 				.addSubcommand(new SetColumnWidthCommand(facade))
 				.addSubcommand(new AutoFitCommand(facade))
-				.addSubcommand(new ImportCsvCommand(facade));
+				.addSubcommand(new ImportCsvCommand(facade))
+				.addSubcommand(new FindColumnCommand(facade))
+				.addSubcommand(new InsertColumnCommand(facade))
+				.addSubcommand(new AppendColumnCommand(facade))
+				.addSubcommand(new RangeStatsCommand(facade));
 	}
 
 	@Override

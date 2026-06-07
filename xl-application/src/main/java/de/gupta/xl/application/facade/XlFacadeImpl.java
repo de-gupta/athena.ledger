@@ -3,6 +3,7 @@ package de.gupta.xl.application.facade;
 import de.gupta.aletheia.trials.Fallible;
 import de.gupta.xl.application.port.in.XlFacade;
 import de.gupta.xl.application.service.WorkbookService;
+import de.gupta.xl.application.transfer.RangeStats;
 import de.gupta.xl.application.transfer.SheetSummary;
 import de.gupta.xl.application.transfer.WriteCellRequest;
 import de.gupta.xl.application.transfer.WriteRangeRequest;
@@ -220,4 +221,61 @@ public final class XlFacadeImpl implements XlFacade
             return null;
         });
     }
+
+	@Override
+	public Fallible<String> findColumn(final Path file, final String sheet, final String header)
+	{
+		return Fallible.<Void>beckon(null).map(_ -> workbookService.findColumn(file, sheet, header));
+	}
+
+	@Override
+	public Fallible<Void> insertColumn(final Path file, final String sheet,
+	                                   final String columnRef, final List<CellValue> values)
+	{
+		return Fallible.<Void>beckon(null).map(_ ->
+		{
+			workbookService.insertColumn(file, sheet, columnRef, values);
+			return null;
+		});
+	}
+
+	@Override
+	public Fallible<Void> appendColumn(final Path file, final String sheet, final List<CellValue> values)
+	{
+		return Fallible.<Void>beckon(null).map(_ ->
+		{
+			workbookService.appendColumn(file, sheet, values);
+			return null;
+		});
+	}
+
+	@Override
+	public Fallible<RangeStats> rangeStats(final Path file, final String sheet,
+	                                       final String fromCell, final String toCell)
+	{
+		return Fallible.<Void>beckon(null).map(_ ->
+		{
+			var grid = workbookService.readRange(file, sheet, fromCell, toCell);
+			var allValues = grid.rows().stream().flatMap(List::stream).toList();
+			var numericValues = allValues.stream()
+			                             .filter(CellValue.Num.class::isInstance)
+			                             .mapToDouble(v -> ((CellValue.Num) v).value())
+			                             .toArray();
+			var total = (long) allValues.size();
+			var numericCount = (long) numericValues.length;
+			if (numericCount == 0)
+			{
+				return new RangeStats(total, 0L, total, null, null, null, null);
+			}
+			var min = java.util.Arrays.stream(numericValues).min().orElseThrow();
+			var max = java.util.Arrays.stream(numericValues).max().orElseThrow();
+			var mean = java.util.Arrays.stream(numericValues).average().orElseThrow();
+			var variance = java.util.Arrays.stream(numericValues)
+			                               .map(v -> (v - mean) * (v - mean))
+			                               .average().orElseThrow();
+			return new RangeStats(total, numericCount, total - numericCount,
+					min, max, mean, Math.sqrt(variance));
+		});
+	}
+
 }

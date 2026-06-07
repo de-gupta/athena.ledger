@@ -582,4 +582,74 @@ final class PoiWorkbookRepositoryITCase
 					.as("A1 after auto-fit").isEqualTo(new CellValue.Str("hello world"));
 		}
 	}
+
+	@Nested
+	@DisplayName("findColumn")
+	final class FindColumn
+	{
+		@Test
+		@DisplayName("returns the 0-based index of the matching header")
+		void returnsThe0BasedIndexOfTheMatchingHeader(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("A1"), new CellValue.Str("Name"));
+			repository.writeCell(file, "Sheet1", CellReference.of("B1"), new CellValue.Str("Score"));
+
+			assertThat(repository.findColumn(file, "Sheet1", "Score")).as("Score column").isEqualTo(1);
+		}
+
+		@Test
+		@DisplayName("returns -1 when header is not found")
+		void returnsMinus1WhenHeaderIsNotFound(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+
+			assertThat(repository.findColumn(file, "Sheet1", "Missing")).as("not found").isEqualTo(-1);
+		}
+	}
+
+	@Nested
+	@DisplayName("insertColumn")
+	final class InsertColumn
+	{
+		@Test
+		@DisplayName("shifts existing columns right and writes new values")
+		void shiftsExistingColumnsRightAndWritesNewValues(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("A1"), new CellValue.Str("original"));
+
+			repository.insertColumn(file, "Sheet1", ColumnReference.of("A"),
+					List.of(new CellValue.Str("inserted")));
+
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("A1")))
+					.as("A1 has new value").isEqualTo(new CellValue.Str("inserted"));
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("B1")))
+					.as("original shifted to B").isEqualTo(new CellValue.Str("original"));
+		}
+	}
+
+	@Nested
+	@DisplayName("appendColumn")
+	final class AppendColumn
+	{
+		@Test
+		@DisplayName("writes after the last occupied column")
+		void writesAfterTheLastOccupiedColumn(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("A1"), new CellValue.Str("existing"));
+
+			repository.appendColumn(file, "Sheet1", List.of(new CellValue.Str("appended")));
+
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("A1")))
+					.as("A1 unchanged").isEqualTo(new CellValue.Str("existing"));
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("B1")))
+					.as("B1 has appended value").isEqualTo(new CellValue.Str("appended"));
+		}
+	}
 }

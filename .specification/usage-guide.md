@@ -55,6 +55,10 @@ numeric → `NUM`; anything else → `STR`. For `FORMULA`, leading `=` is option
 | `xl set-col-width <file> <sheet> <col> <width>`                                           | set column width in character units                         |
 | `xl auto-fit <file> <sheet> [<col>]`                                                      | auto-fit one or all columns                                 |
 | `xl tab-color <file> <sheet> <hex-rgb>`                                                   | set sheet tab color                                         |
+| `xl find-col <file> <sheet> <header>`                                                     | find column letter of named header in first row             |
+| `xl insert-col <file> <sheet> <col>`                                                      | insert column at position, shift right, fill from stdin     |
+| `xl append-col <file> <sheet>`                                                            | append column after last occupied, fill from stdin          |
+| `xl stats <file> <sheet> <from> <to>`                                                     | compute count/min/max/mean/stdev over numeric range         |
 
 ---
 
@@ -437,6 +441,85 @@ xl import-csv report.xlsx Sheet1 data.tsv --delimiter "\t"
 endings. Blank lines are skipped.
 
 **Errors:** CSV file not found, invalid start cell, invalid Excel file path.
+
+---
+
+### `xl find-col <file> <sheet> <header>`
+
+Find the column letter of a named header in the first row of a sheet. Outputs only the letter with no trailing newline —
+designed for shell variable assignment.
+
+```bash
+xl find-col vol-surface.xlsx AAPL strike
+# → A
+
+col=$(xl find-col position.xlsx positions spotPrice)
+printf "950\n950\n950\n" | xl write-range vol-surface.xlsx AAPL "${col}2"
+```
+
+Search is case-sensitive. Returns the leftmost match if duplicates exist.
+
+**Errors:** file not found, sheet not found, header not found in first row.
+
+---
+
+### `xl insert-col <file> <sheet> <col>`
+
+Insert a new blank column at the given position, shifting all existing columns right by one. Reads one cell value per
+line from stdin and writes into the new column starting at row 1. Type inference is applied.
+
+```bash
+printf "strike\n700\n800\n900\n" | xl insert-col vol-surface.xlsx MU A
+printf "spotPrice\n950\n950\n950\n" | xl insert-col position.xlsx positions N
+```
+
+`col` accepts a letter (`A`, `N`) or 1-based integer (`1`, `14`).
+
+**Errors:** file not found, sheet not found, invalid column reference.
+
+---
+
+### `xl append-col <file> <sheet>`
+
+Append a new column immediately after the last occupied column. Reads one cell value per line from stdin. Type inference
+is applied.
+
+```bash
+printf "spotPrice\n950\n950\n" | xl append-col position.xlsx positions
+```
+
+**Errors:** file not found, sheet not found.
+
+---
+
+### `xl stats <file> <sheet> <from> <to>`
+
+Compute statistics over the numeric cells in a rectangular range. Non-numeric cells are excluded from aggregation but
+counted. Output is `key:value` pairs, one per line.
+
+```
+$ xl stats vol-surface.xlsx AAPL B2 E7
+count:24
+numeric:24
+non-numeric:0
+min:0.198000
+max:0.550000
+mean:0.305000
+stdev:0.074000
+```
+
+If `numeric` is 0, the `min`, `max`, `mean`, and `stdev` lines are omitted.
+
+**Scripting pattern** — fail if vols are out of range:
+
+```bash
+result=$(xl stats vol-surface.xlsx MU B2 E7)
+min=$(echo "$result" | grep '^min:' | cut -d: -f2)
+max=$(echo "$result" | grep '^max:' | cut -d: -f2)
+awk "BEGIN { exit !($min >= 0.05 && $max <= 2.0) }" && echo "OK" || echo "Out of range" >&2
+```
+
+**Errors:** file not found, sheet not found, invalid cell reference, inverted range.
 
 ---
 
