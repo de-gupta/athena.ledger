@@ -5,6 +5,8 @@ import de.gupta.xl.application.port.in.XlFacade;
 import de.gupta.xl.application.service.WorkbookService;
 import de.gupta.xl.application.transfer.SheetSummary;
 import de.gupta.xl.application.transfer.WriteCellRequest;
+import de.gupta.xl.application.transfer.WriteRangeRequest;
+import de.gupta.xl.domain.CellGrid;
 import de.gupta.xl.domain.CellValue;
 
 import java.nio.file.Path;
@@ -31,6 +33,13 @@ public final class XlFacadeImpl implements XlFacade
 		return Fallible.<Void>beckon(null).map(_ -> workbookService.readCell(file, sheet, cellReference));
 	}
 
+    @Override
+    public Fallible<CellGrid> readRange(final Path file, final String sheet,
+                                        final String fromCell, final String toCell)
+    {
+        return Fallible.<Void>beckon(null).map(_ -> workbookService.readRange(file, sheet, fromCell, toCell));
+    }
+
 	@Override
 	public Fallible<Void> writeCell(final WriteCellRequest request)
 	{
@@ -40,6 +49,16 @@ public final class XlFacadeImpl implements XlFacade
 			return null;
 		});
 	}
+
+    @Override
+    public Fallible<Void> writeRange(final WriteRangeRequest request)
+    {
+        return Fallible.<Void>beckon(null).map(_ ->
+        {
+            workbookService.writeRange(request);
+            return null;
+        });
+    }
 
 	@Override
 	public Fallible<Void> createWorkbook(final Path file, final boolean overwrite)
@@ -71,7 +90,17 @@ public final class XlFacadeImpl implements XlFacade
 		});
 	}
 
-	@Override
+    @Override
+    public Fallible<Void> renameSheet(final Path file, final String sheetName, final String newName)
+    {
+        return Fallible.<Void>beckon(null).map(_ ->
+        {
+            workbookService.renameSheet(file, sheetName, newName);
+            return null;
+        });
+    }
+
+    @Override
 	public Fallible<Void> copySheet(final Path file, final String sourceSheet, final String targetName)
 	{
 		return Fallible.<Void>beckon(null).map(_ ->
@@ -80,4 +109,34 @@ public final class XlFacadeImpl implements XlFacade
 			return null;
 		});
 	}
+
+    @Override
+    public Fallible<Void> moveSheet(final Path file, final String sheetName, final int position)
+    {
+        return Fallible.<Void>beckon(null).map(_ ->
+        {
+            workbookService.moveSheet(file, sheetName, position);
+            return null;
+        });
+    }
+
+    @Override
+    public Fallible<Void> deleteColumn(final Path file, final String sheet, final String columnNotation)
+    {
+        return Fallible.<Void>beckon(null).map(_ ->
+        {
+            workbookService.deleteColumn(file, sheet, columnNotation);
+            return null;
+        });
+    }
+
+    @Override
+    public Fallible<Void> setTabColor(final Path file, final String sheet, final String hexRgb)
+    {
+        return Fallible.<Void>beckon(null).map(_ ->
+        {
+            workbookService.setTabColor(file, sheet, hexRgb);
+            return null;
+        });
+    }
 }

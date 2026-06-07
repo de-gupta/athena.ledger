@@ -1,12 +1,6 @@
 package de.gupta.xl.adapter.cli;
 
-import de.gupta.xl.adapter.cli.command.AddSheetCommand;
-import de.gupta.xl.adapter.cli.command.CopySheetCommand;
-import de.gupta.xl.adapter.cli.command.CreateCommand;
-import de.gupta.xl.adapter.cli.command.DeleteSheetCommand;
-import de.gupta.xl.adapter.cli.command.ReadCommand;
-import de.gupta.xl.adapter.cli.command.SheetsCommand;
-import de.gupta.xl.adapter.cli.command.WriteCommand;
+import de.gupta.xl.adapter.cli.command.*;
 import de.gupta.xl.adapter.poi.PoiWorkbookRepository;
 import de.gupta.xl.application.facade.XlFacadeImpl;
 import de.gupta.xl.application.port.in.XlFacade;
@@ -28,11 +22,17 @@ public final class XlCommand implements Runnable
 		return new CommandLine(new XlCommand())
 				.addSubcommand(new SheetsCommand(facade))
 				.addSubcommand(new ReadCommand(facade))
+				.addSubcommand(new ReadRangeCommand(facade))
 				.addSubcommand(new WriteCommand(facade))
+				.addSubcommand(new WriteRangeCommand(facade))
 				.addSubcommand(new CreateCommand(facade))
 				.addSubcommand(new AddSheetCommand(facade))
+				.addSubcommand(new RenameSheetCommand(facade))
 				.addSubcommand(new DeleteSheetCommand(facade))
-				.addSubcommand(new CopySheetCommand(facade));
+				.addSubcommand(new CopySheetCommand(facade))
+				.addSubcommand(new MoveSheetCommand(facade))
+				.addSubcommand(new DeleteColumnCommand(facade))
+				.addSubcommand(new TabColorCommand(facade));
 	}
 
 	@Override

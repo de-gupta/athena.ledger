@@ -230,4 +230,220 @@ final class WorkbookServiceTest
 			assertThat(result).as("cell value").isEqualTo(new CellValue.Str("hello"));
 		}
 	}
+
+    @Nested
+    @DisplayName("readRange")
+    final class ReadRange
+    {
+        @Test
+        @DisplayName("delegates to repository with parsed range reference")
+        void delegatesToRepositoryWithParsedRangeReference(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+            var grid = de.gupta.xl.domain.CellGrid.of(List.of(
+                    List.of(new CellValue.Str("A"), new CellValue.Str("B"))
+            ));
+            when(repository.readRange(eq(file), eq("Sheet1"), any())).thenReturn(grid);
+
+            var result = service.readRange(file, "Sheet1", "A1", "B1");
+
+            assertThat(result).as("returned grid").isEqualTo(grid);
+        }
+
+        @Test
+        @DisplayName("throws IllegalArgumentException when from cell notation is invalid")
+        void throwsWhenFromCellNotationIsInvalid(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+
+            assertThatThrownBy(() -> service.readRange(file, "Sheet1", "INVALID", "B2"))
+                    .as("invalid from cell")
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("throws IllegalArgumentException when range is inverted")
+        void throwsWhenRangeIsInverted(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+
+            assertThatThrownBy(() -> service.readRange(file, "Sheet1", "B2", "A1"))
+                    .as("inverted range")
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("writeRange")
+    final class WriteRange
+    {
+        @Test
+        @DisplayName("delegates to repository with parsed start reference and grid")
+        void delegatesToRepositoryWithParsedStartReferenceAndGrid(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+            List<List<CellValue>> rows = List.of(
+                    List.of(new CellValue.Str("A"), new CellValue.Num(1.0)),
+                    List.of(new CellValue.Str("B"), new CellValue.Num(2.0))
+            );
+            var grid = de.gupta.xl.domain.CellGrid.of(rows);
+            var request = new de.gupta.xl.application.transfer.WriteRangeRequest(
+                    file, "Sheet1", "B2", grid, true);
+
+            service.writeRange(request);
+
+            verify(repository).writeRange(eq(file), eq("Sheet1"), any(), eq(grid), eq(true));
+        }
+
+        @Test
+        @DisplayName("does nothing when grid is empty")
+        void doesNothingWhenGridIsEmpty(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+            var request = new de.gupta.xl.application.transfer.WriteRangeRequest(
+                    file, "Sheet1", "A1", de.gupta.xl.domain.CellGrid.empty(), false);
+
+            service.writeRange(request);
+
+            verify(repository, never()).writeRange(any(), any(), any(), any(), anyBoolean());
+        }
+
+        @Test
+        @DisplayName("throws IllegalArgumentException when start cell is invalid")
+        void throwsWhenStartCellIsInvalid(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+            var grid = de.gupta.xl.domain.CellGrid.of(
+                    List.of(List.of(new CellValue.Str("x"))));
+            var request = new de.gupta.xl.application.transfer.WriteRangeRequest(
+                    file, "Sheet1", "INVALID", grid, false);
+
+            assertThatThrownBy(() -> service.writeRange(request))
+                    .as("invalid start cell")
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("renameSheet")
+    final class RenameSheet
+    {
+        @Test
+        @DisplayName("throws SheetNotFoundException when sheet does not exist")
+        void throwsWhenSheetDoesNotExist(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+            when(repository.load(file)).thenReturn(workbookWith(file, "Sheet1"));
+
+            assertThatThrownBy(() -> service.renameSheet(file, "Missing", "NewName"))
+                    .as("not found guard")
+                    .isInstanceOf(de.gupta.xl.domain.exception.SheetNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("throws SheetAlreadyExistsException when new name is already taken")
+        void throwsWhenNewNameIsAlreadyTaken(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+            when(repository.load(file)).thenReturn(workbookWith(file, "Sheet1", "Sheet2"));
+
+            assertThatThrownBy(() -> service.renameSheet(file, "Sheet1", "Sheet2"))
+                    .as("duplicate name guard")
+                    .isInstanceOf(de.gupta.xl.domain.exception.SheetAlreadyExistsException.class);
+        }
+
+        @Test
+        @DisplayName("delegates to repository when name is valid")
+        void delegatesToRepositoryWhenNameIsValid(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+            when(repository.load(file)).thenReturn(workbookWith(file, "Sheet1"));
+
+            service.renameSheet(file, "Sheet1", "Renamed");
+
+            verify(repository).renameSheet(file, "Sheet1", "Renamed");
+        }
+    }
+
+    @Nested
+    @DisplayName("moveSheet")
+    final class MoveSheet
+    {
+        @Test
+        @DisplayName("throws SheetNotFoundException when sheet does not exist")
+        void throwsWhenSheetDoesNotExist(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+            when(repository.load(file)).thenReturn(workbookWith(file, "Sheet1"));
+
+            assertThatThrownBy(() -> service.moveSheet(file, "Missing", 0))
+                    .as("not found guard")
+                    .isInstanceOf(de.gupta.xl.domain.exception.SheetNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("throws IllegalArgumentException when position is out of range")
+        void throwsWhenPositionIsOutOfRange(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+            when(repository.load(file)).thenReturn(workbookWith(file, "Sheet1", "Sheet2"));
+
+            assertThatThrownBy(() -> service.moveSheet(file, "Sheet1", 5))
+                    .as("out of range guard")
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("delegates to repository when position is valid")
+        void delegatesToRepositoryWhenPositionIsValid(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+            when(repository.load(file)).thenReturn(workbookWith(file, "Sheet1", "Sheet2"));
+
+            service.moveSheet(file, "Sheet2", 0);
+
+            verify(repository).moveSheet(file, "Sheet2", 0);
+        }
+    }
+
+    @Nested
+    @DisplayName("deleteColumn")
+    final class DeleteColumn
+    {
+        @Test
+        @DisplayName("throws SheetNotFoundException when sheet does not exist")
+        void throwsWhenSheetDoesNotExist(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+            when(repository.load(file)).thenReturn(workbookWith(file, "Sheet1"));
+
+            assertThatThrownBy(() -> service.deleteColumn(file, "Missing", "A"))
+                    .as("not found guard")
+                    .isInstanceOf(de.gupta.xl.domain.exception.SheetNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("delegates with 0-based column index for letter notation")
+        void delegatesWithCorrectColumnIndexForLetterNotation(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+            when(repository.load(file)).thenReturn(workbookWith(file, "Sheet1"));
+
+            service.deleteColumn(file, "Sheet1", "C");
+
+            verify(repository).deleteColumn(file, "Sheet1", 2);
+        }
+
+        @Test
+        @DisplayName("delegates with 0-based column index for integer notation")
+        void delegatesWithCorrectColumnIndexForIntegerNotation(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+            when(repository.load(file)).thenReturn(workbookWith(file, "Sheet1"));
+
+            service.deleteColumn(file, "Sheet1", "3");
+
+            verify(repository).deleteColumn(file, "Sheet1", 2);
+        }
+    }
 }

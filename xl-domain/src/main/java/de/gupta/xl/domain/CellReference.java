@@ -58,12 +58,7 @@ public final class CellReference
 
 	private static int parseColumnIndex(final String letters)
 	{
-		var index = 0;
-		for (var character : letters.toCharArray())
-		{
-			index = index * 26 + (character - 'A' + 1);
-		}
-		return index - 1;
+		return ColumnReference.parseLetters(letters);
 	}
 
 	private static int parseRowIndex(final String digits)

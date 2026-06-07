@@ -151,6 +151,71 @@ xl delete-sheet report.xlsx "Draft"
 
 ---
 
+### `xl read-range <file> <sheet> <from> <to>`
+
+Read a rectangular range of cells and print as TSV (tab-separated values). Each row is a line; columns are separated by
+tabs. Empty cells produce empty fields.
+
+```
+$ xl read-range report.xlsx Sheet1 A1 C3
+Name    Score   Grade
+Alice   95      A
+Bob     87      B
+```
+
+Output is compatible with `xl write-range` stdin — you can pipe the output of `read-range` directly into `write-range`
+to copy a range.
+
+```
+$ xl read-range src.xlsx Sheet1 A1 C10 | xl write-range dst.xlsx Sheet1 A1 --overwrite
+```
+
+Add `--typed` to prefix each cell value with its type token — identical to the format used by `xl read`:
+
+```
+$ xl read-range report.xlsx Sheet1 A1 B2 --typed
+STR:Name    STR:Score
+STR:Alice   NUM:95.0
+```
+
+**Number formatting (plain mode):** whole numbers are printed without a decimal (e.g. `95`, not `95.0`). Fractional
+numbers print as-is (`42.5`). Dates use ISO-8601 (`2026-06-07`). Formulas print their expression without a leading `=`.
+
+**Trailing empty columns:** trailing empty cells at the end of a row are stripped from the output line. Mid-row empty
+cells produce empty fields (e.g. `Name\t\tGrade` for a missing middle cell).
+
+**Errors:** file not found, invalid cell reference, inverted range (from is below or to the right of to).
+
+---
+
+### `xl write-range <file> <sheet> <start-cell> [--overwrite]`
+
+Write a table of values from stdin, starting at the given cell. Input is read as TSV (tab-separated values): each line
+is a row, tabs separate columns. Type inference is applied to each cell value using the same rules as `xl write`.
+
+```
+$ printf "Name\tScore\nAlice\t95\nBob\t87" | xl write-range report.xlsx Sheet1 B2
+```
+
+This writes a 3-row × 2-column table starting at B2:
+
+```
+B2=STR:Name   C2=STR:Score
+B3=STR:Alice  C3=NUM:95.0
+B4=STR:Bob    C4=NUM:87.0
+```
+
+Without `--overwrite`, any target cell that already contains a value is skipped; only empty cells are written. Pass
+`--overwrite` to replace all cells in the range regardless of existing content.
+
+```
+$ printf "header\t42" | xl write-range report.xlsx Sheet1 A1 --overwrite
+```
+
+**Errors:** file not found, invalid start cell reference.
+
+---
+
 ### `xl copy-sheet <file> <source-sheet> <new-name>`
 
 Copy an existing sheet to a new sheet in the same workbook.
@@ -160,6 +225,59 @@ xl copy-sheet report.xlsx "Template" "Q3"
 ```
 
 **Errors:** file not found, source sheet not found, target name already exists.
+
+---
+
+### `xl rename-sheet <file> <sheet-name> <new-name>`
+
+Rename a sheet in place. Safer than `copy-sheet` + `delete-sheet` because it never creates an intermediate name.
+
+```
+xl rename-sheet vol-surface.xlsx VolSurface AAPL
+```
+
+**Errors:** file not found, sheet not found, new name already exists.
+
+---
+
+### `xl move-sheet <file> <sheet-name> <position>`
+
+Move a sheet to the given 0-based tab position. Position 0 = first tab.
+
+```
+xl move-sheet position.xlsx positions 0
+```
+
+**Errors:** file not found, sheet not found, position out of range.
+
+---
+
+### `xl delete-column <file> <sheet> <column>`
+
+Delete a column and shift all columns to its right one position left. Column can be a letter (`A`, `B`, `AA`) or a
+1-based integer (`1`, `2`).
+
+```
+xl delete-column vol-surface.xlsx MU I
+xl delete-column vol-surface.xlsx MU 9
+```
+
+**Errors:** file not found, sheet not found, invalid column notation.
+
+---
+
+### `xl tab-color <file> <sheet> <hex-rgb>`
+
+Set the tab color of a sheet. Color is a 6-digit hex RGB string without a leading `#`.
+
+```
+xl tab-color position-valuation.xlsx positions   4472C4   # blue
+xl tab-color position-valuation.xlsx trajectories FFFF00   # yellow
+xl tab-color position-valuation.xlsx results      70AD47   # green
+xl tab-color position-valuation.xlsx totals       FFC000   # orange
+```
+
+**Errors:** file not found, sheet not found, invalid hex string.
 
 ---
 
@@ -302,6 +420,127 @@ println(ex.getMessage());return null;}
 
 ---
 
+#### `readRange`
+
+```java
+Fallible<CellGrid> readRange(Path file, String sheet, String fromCell, String toCell)
+```
+
+Read a rectangular range. Returns a `CellGrid` whose dimensions match `rowCount = toRow - fromRow + 1` and
+`columnCount = toCol - fromCol + 1`. Cells not present in the sheet are returned as `CellValue.Empty`.
+
+```java
+xl.readRange(Path.of("report.xlsx"), "Sheet1","A1","C3")
+		.
+
+fold(
+		grid ->
+		{
+		grid.
+
+rows().
+
+forEach(row ->
+		System.out.
+
+println(row.stream()
+                  .
+
+map(Object::toString)
+                  .
+
+collect(Collectors.joining("\t"))));
+		return null;
+		},
+ex ->{System.err.
+
+println(ex.getMessage());return null;}
+		);
+```
+
+`CellGrid` accessors:
+
+```java
+int rows = grid.rowCount();        // number of rows
+int cols = grid.columnCount();     // columns in the first row
+boolean none = grid.isEmpty();         // true when rowCount() == 0
+List<List<CellValue>> raw = grid.rows(); // immutable row-major data
+CellValue cell = grid.rows().get(r).get(c); // cell at row r, column c (0-based)
+```
+
+The range corners are validated: `fromCell` must be at or above and to the left of `toCell`. Passing an inverted range (
+e.g. `"C5"` → `"A1"`) throws `IllegalArgumentException`.
+
+**Failures:** `WorkbookNotFoundException`, `IllegalArgumentException` (invalid cell reference or inverted range).
+
+---
+
+#### `writeRange`
+
+```java
+Fallible<Void> writeRange(WriteRangeRequest request)
+```
+
+Write a 2D table starting at a given cell. The target range is defined by the start cell plus the dimensions of the
+data — no end-cell argument needed.
+
+```java
+import de.gupta.xl.application.transfer.WriteRangeRequest;
+import de.gupta.xl.domain.CellGrid;
+import de.gupta.xl.domain.CellValue;
+
+var grid = CellGrid.of(List.of(
+		List.of(new CellValue.Str("Name"), new CellValue.Str("Score")),
+		List.of(new CellValue.Str("Alice"), new CellValue.Num(95.0)),
+		List.of(new CellValue.Str("Bob"), new CellValue.Num(87.0))
+));
+
+var request = new WriteRangeRequest(
+		Path.of("report.xlsx"),
+		"Sheet1",
+		"B2",
+		grid,
+		true        // overwrite=true → replace existing content
+);
+
+xl.
+
+writeRange(request).
+
+fold(
+		_  ->null,
+ex ->{System.err.
+
+println(ex.getMessage());return null;}
+		);
+```
+
+`WriteRangeRequest` fields:
+
+| Field       | Type       | Description                                                |
+|-------------|------------|------------------------------------------------------------|
+| `file`      | `Path`     | Workbook file                                              |
+| `sheet`     | `String`   | Target sheet name (created if absent)                      |
+| `startCell` | `String`   | Top-left corner in A1 notation                             |
+| `grid`      | `CellGrid` | Table data (see below)                                     |
+| `overwrite` | `boolean`  | `true` = replace all cells; `false` = skip non-empty cells |
+
+`CellGrid` is the domain type for 2D tabular cell data:
+
+```java
+CellGrid grid = CellGrid.of(rows);   // from List<List<CellValue>>
+CellGrid empty = CellGrid.empty();   // convenience factory
+int count = grid.rowCount();         // number of rows
+boolean nothing = grid.isEmpty();    // true when rowCount() == 0
+List<List<CellValue>> raw = grid.rows(); // underlying data (immutable)
+```
+
+An empty `CellGrid` is a no-op — the repository is not called.
+
+**Failures:** `WorkbookNotFoundException`, `IllegalArgumentException` (invalid start cell).
+
+---
+
 #### `writeCell`
 
 ```java
@@ -423,14 +662,65 @@ xl.copySheet(Path.of("report.xlsx"), "Template","Q4");
 
 ---
 
+#### `renameSheet`
+
+```java
+Fallible<Void> renameSheet(Path file, String sheetName, String newName)
+```
+
+**Failures:** `WorkbookNotFoundException`, `SheetNotFoundException`, `SheetAlreadyExistsException` (new name taken).
+
+---
+
+#### `moveSheet`
+
+```java
+Fallible<Void> moveSheet(Path file, String sheetName, int position)
+```
+
+`position` is 0-based. Throws `IllegalArgumentException` if out of range.
+
+**Failures:** `WorkbookNotFoundException`, `SheetNotFoundException`, `IllegalArgumentException`.
+
+---
+
+#### `deleteColumn`
+
+```java
+Fallible<Void> deleteColumn(Path file, String sheet, String columnNotation)
+```
+
+`columnNotation` accepts letter notation (`"A"`, `"AA"`) or 1-based integer (`"1"`, `"26"`). Columns after the deleted
+one shift left.
+
+**Failures:** `WorkbookNotFoundException`, `SheetNotFoundException`, `IllegalArgumentException` (invalid notation).
+
+---
+
+#### `setTabColor`
+
+```java
+Fallible<Void> setTabColor(Path file, String sheet, String hexRgb)
+```
+
+`hexRgb` is a 6-digit hex RGB string, with or without a leading `#` (e.g. `"70AD47"` or `"#70AD47"`).
+
+**Failures:** `WorkbookNotFoundException`, `SheetNotFoundException`, `IllegalArgumentException` (invalid hex).
+
+---
+
 ### Domain types (package `de.gupta.xl.domain`)
 
-| Type              | Description                                                                     |
-|-------------------|---------------------------------------------------------------------------------|
-| `CellValue`       | Sealed interface with variants `Str`, `Num`, `Bool`, `Date`, `Formula`, `Empty` |
-| `CellReference`   | Parsed A1 notation; `CellReference.of("B3")` → `columnIndex()=1, rowIndex()=2`  |
-| `Sheet`           | Record: `name()`, `rowCount()`                                                  |
-| `WorkbookContent` | Record: `path()`, `sheets()`                                                    |
+| Type                 | Description                                                                                             |
+|----------------------|---------------------------------------------------------------------------------------------------------|
+| `CellValue`          | Sealed interface with variants `Str`, `Num`, `Bool`, `Date`, `Formula`, `Empty`                         |
+| `CellReference`      | Parsed A1 notation; `CellReference.of("B3")` → `columnIndex()=1, rowIndex()=2`                          |
+| `CellGrid`           | Immutable 2D table; `CellGrid.of(rows)`, `CellGrid.empty()`, `rowCount()`, `columnCount()`, `isEmpty()` |
+| `CellRangeReference` | Rectangular range address; `CellRangeReference.of("A1","C5")`, `rowCount()`, `columnCount()`            |
+| `ColumnReference`    | Column address; `ColumnReference.of("C")` or `ColumnReference.of("3")` → `index()` (0-based)            |
+| `TabColor`           | RGB tab color; `TabColor.of("70AD47")` → `red()`, `green()`, `blue()`                                   |
+| `Sheet`              | Record: `name()`, `rowCount()`                                                                          |
+| `WorkbookContent`    | Record: `path()`, `sheets()`                                                                            |
 
 ### Exception types (package `de.gupta.xl.domain.exception`)
 

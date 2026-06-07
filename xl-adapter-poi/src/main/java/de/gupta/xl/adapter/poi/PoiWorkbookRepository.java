@@ -1,12 +1,10 @@
 package de.gupta.xl.adapter.poi;
 
 import de.gupta.xl.application.port.out.WorkbookRepository;
-import de.gupta.xl.domain.CellReference;
-import de.gupta.xl.domain.CellValue;
-import de.gupta.xl.domain.Sheet;
-import de.gupta.xl.domain.WorkbookContent;
+import de.gupta.xl.domain.*;
 import de.gupta.xl.domain.exception.WorkbookNotFoundException;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
@@ -21,6 +19,8 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+
 
 public final class PoiWorkbookRepository implements WorkbookRepository
 {
@@ -67,6 +67,49 @@ public final class PoiWorkbookRepository implements WorkbookRepository
 	public void addSheet(final Path file, final String sheetName)
 	{
 		modifyWorkbook(file, workbook -> workbook.createSheet(sheetName));
+	}
+
+	@Override
+	public void renameSheet(final Path file, final String sheetName, final String newName)
+	{
+		modifyWorkbook(file, workbook ->
+				workbook.setSheetName(workbook.getSheetIndex(sheetName), newName));
+	}
+
+	@Override
+	public void moveSheet(final Path file, final String sheetName, final int position)
+	{
+		modifyWorkbook(file, workbook -> workbook.setSheetOrder(sheetName, position));
+	}
+
+	@Override
+	public void deleteColumn(final Path file, final String sheet, final int columnIndex)
+	{
+		modifyWorkbook(file, workbook ->
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return;
+			}
+			poiSheet.shiftColumns(columnIndex + 1, org.apache.poi.ss.SpreadsheetVersion.EXCEL2007.getLastColumnIndex(),
+					-1);
+		});
+	}
+
+	@Override
+	public void setTabColor(final Path file, final String sheet, final TabColor color)
+	{
+		modifyWorkbook(file, workbook ->
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return;
+			}
+			poiSheet.setTabColor(new org.apache.poi.xssf.usermodel.XSSFColor(
+					new byte[]{(byte) color.red(), (byte) color.green(), (byte) color.blue()}, null));
+		});
 	}
 
 	@Override
@@ -122,6 +165,37 @@ public final class PoiWorkbookRepository implements WorkbookRepository
 	}
 
 	@Override
+	public CellGrid readRange(final Path file, final String sheet, final CellRangeReference range)
+	{
+		requireExists(file);
+		try (var inputStream = Files.newInputStream(file);
+		     var workbook = new XSSFWorkbook(inputStream))
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			var rows = new ArrayList<List<CellValue>>();
+			for (var rowOffset = 0; rowOffset < range.rowCount(); rowOffset++)
+			{
+				var absoluteRowIndex = range.topLeft().rowIndex() + rowOffset;
+				var poiRow = poiSheet != null ? poiSheet.getRow(absoluteRowIndex) : null;
+				var cells = new ArrayList<CellValue>();
+				for (var columnOffset = 0; columnOffset < range.columnCount(); columnOffset++)
+				{
+					var absoluteColumnIndex = range.topLeft().columnIndex() + columnOffset;
+					var cell = poiRow != null ? poiRow.getCell(absoluteColumnIndex) : null;
+					cells.add(cell != null ? toCellValue(cell) : new CellValue.Empty());
+				}
+				rows.add(List.copyOf(cells));
+			}
+			return CellGrid.of(rows);
+		}
+		catch (IOException caught)
+		{
+			log.error("Failed to read range from workbook: {}", file, caught);
+			throw new IllegalStateException("Failed to read range from workbook: " + file, caught);
+		}
+	}
+
+	@Override
 	public void writeCell(final Path file, final String sheet, final CellReference reference, final CellValue value)
 	{
 		requireExists(file);
@@ -143,6 +217,42 @@ public final class PoiWorkbookRepository implements WorkbookRepository
 				cell = row.createCell(reference.columnIndex());
 			}
 			applyCellValue(workbook, cell, value);
+		});
+	}
+
+	@Override
+	public void writeRange(final Path file, final String sheet, final CellReference startReference,
+	                       final CellGrid grid, final boolean overwrite)
+	{
+		requireExists(file);
+		modifyWorkbook(file, workbook ->
+		{
+			var poiSheet = Objects.requireNonNullElseGet(
+					workbook.getSheet(sheet), () -> workbook.createSheet(sheet));
+			var rows = grid.rows();
+			for (var rowOffset = 0; rowOffset < rows.size(); rowOffset++)
+			{
+				var rowData = rows.get(rowOffset);
+				var absoluteRowIndex = startReference.rowIndex() + rowOffset;
+				var poiRow = Objects.requireNonNullElseGet(
+						poiSheet.getRow(absoluteRowIndex), () -> poiSheet.createRow(absoluteRowIndex));
+				for (var columnOffset = 0; columnOffset < rowData.size(); columnOffset++)
+				{
+					var absoluteColumnIndex = startReference.columnIndex() + columnOffset;
+					if (!overwrite)
+					{
+						var existingCell = poiRow.getCell(absoluteColumnIndex);
+						if (existingCell != null && existingCell.getCellType() != CellType.BLANK)
+						{
+							continue;
+						}
+					}
+					var cell = Objects.requireNonNullElseGet(
+							poiRow.getCell(absoluteColumnIndex),
+							() -> poiRow.createCell(absoluteColumnIndex));
+					applyCellValue(workbook, cell, rowData.get(columnOffset));
+				}
+			}
 		});
 	}
 
