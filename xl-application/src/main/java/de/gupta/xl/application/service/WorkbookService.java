@@ -187,4 +187,82 @@ public final class WorkbookService
 		}
 		repository.copySheet(file, sourceSheet, targetName);
 	}
+
+    public List<CellValue> readRow(final Path file, final String sheet, final String rowRef)
+    {
+        StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+        StringSanitizationUtility.requireNotBlank(rowRef, "Row reference must not be blank");
+        return repository.readRow(file, sheet, RowReference.of(rowRef));
+    }
+
+    public List<CellValue> readColumn(final Path file, final String sheet, final String columnRef)
+    {
+        StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+        StringSanitizationUtility.requireNotBlank(columnRef, "Column reference must not be blank");
+        return repository.readColumn(file, sheet, ColumnReference.of(columnRef));
+    }
+
+    public CellValue evaluateCell(final Path file, final String sheet, final String cellReference)
+    {
+        StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+        StringSanitizationUtility.requireNotBlank(cellReference, "Cell reference must not be blank");
+        return repository.evaluateCell(file, sheet, CellReference.of(cellReference));
+    }
+
+    public void insertRow(final Path file, final String sheet, final String rowRef)
+    {
+        StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+        StringSanitizationUtility.requireNotBlank(rowRef, "Row reference must not be blank");
+        var parsedRow = RowReference.of(rowRef);
+        requireSheetExists(file, sheet);
+        repository.insertRow(file, sheet, parsedRow);
+    }
+
+    public void deleteRow(final Path file, final String sheet, final String rowRef)
+    {
+        StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+        StringSanitizationUtility.requireNotBlank(rowRef, "Row reference must not be blank");
+        var parsedRow = RowReference.of(rowRef);
+        requireSheetExists(file, sheet);
+        repository.deleteRow(file, sheet, parsedRow);
+    }
+
+    public void setColumnWidth(final Path file, final String sheet, final String columnRef, final int characterWidth)
+    {
+        StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+        StringSanitizationUtility.requireNotBlank(columnRef, "Column reference must not be blank");
+        if (characterWidth < 1)
+        {
+            throw new IllegalArgumentException("Column width must be at least 1 character");
+        }
+        var parsedColumn = ColumnReference.of(columnRef);
+        requireSheetExists(file, sheet);
+        repository.setColumnWidth(file, sheet, parsedColumn, characterWidth);
+    }
+
+    public void autoFitColumn(final Path file, final String sheet, final String columnRef)
+    {
+        StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+        StringSanitizationUtility.requireNotBlank(columnRef, "Column reference must not be blank");
+        var parsedColumn = ColumnReference.of(columnRef);
+        requireSheetExists(file, sheet);
+        repository.autoFitColumn(file, sheet, parsedColumn);
+    }
+
+    public void autoFitAllColumns(final Path file, final String sheet)
+    {
+        StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+        requireSheetExists(file, sheet);
+        repository.autoFitAllColumns(file, sheet);
+    }
+
+    private void requireSheetExists(final Path file, final String sheet)
+    {
+        var sheetExists = repository.load(file).sheets().stream()
+                                    .anyMatch(s -> s.name().equals(sheet));
+        if (!sheetExists)
+        {
+            throw SheetNotFoundException.forSheet(sheet);
+        }
+    }
 }

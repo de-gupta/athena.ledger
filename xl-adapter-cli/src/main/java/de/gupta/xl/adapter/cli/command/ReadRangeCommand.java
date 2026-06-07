@@ -1,7 +1,7 @@
 package de.gupta.xl.adapter.cli.command;
 
+import de.gupta.xl.adapter.cli.command.support.CellValueFormatter;
 import de.gupta.xl.application.port.in.XlFacade;
-import de.gupta.xl.domain.CellValue;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -46,8 +46,8 @@ public final class ReadRangeCommand implements Callable<Integer>
 				{
 					grid.rows().forEach(row ->
 							System.out.println(row.stream()
-							                      .map(typed ? ReadRangeCommand::formatTyped :
-														  ReadRangeCommand::formatValue)
+							                      .map(typed ? CellValueFormatter::typed :
+														  CellValueFormatter::raw)
 							                      .collect(Collectors.joining("\t"))));
 					return 0;
 				},
@@ -59,31 +59,4 @@ public final class ReadRangeCommand implements Callable<Integer>
 		);
 	}
 
-	private static String formatValue(final CellValue value)
-	{
-		return switch (value)
-		{
-			case CellValue.Str(var string) -> string;
-			case CellValue.Num(var number) -> number % 1 == 0
-					? String.valueOf((long) number)
-					: String.valueOf(number);
-			case CellValue.Bool(var bool) -> String.valueOf(bool);
-			case CellValue.Date(var date) -> date.toString();
-			case CellValue.Formula(var expression) -> expression;
-			case CellValue.Empty() -> "";
-		};
-	}
-
-	private static String formatTyped(final CellValue value)
-	{
-		return switch (value)
-		{
-			case CellValue.Str(var string) -> "STR:" + string;
-			case CellValue.Num(var number) -> "NUM:" + number;
-			case CellValue.Bool(var bool) -> "BOOL:" + bool;
-			case CellValue.Date(var date) -> "DATE:" + date;
-			case CellValue.Formula(var expression) -> "FORMULA:" + expression;
-			case CellValue.Empty() -> "EMPTY:";
-		};
-	}
 }

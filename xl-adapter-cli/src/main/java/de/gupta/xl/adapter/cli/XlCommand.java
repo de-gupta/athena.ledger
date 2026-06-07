@@ -36,7 +36,14 @@ public final class XlCommand implements Runnable
 				.addSubcommand(new CopySheetCommand(facade))
 				.addSubcommand(new MoveSheetCommand(facade))
 				.addSubcommand(new DeleteColumnCommand(facade))
-				.addSubcommand(new TabColorCommand(facade));
+				.addSubcommand(new TabColorCommand(facade))
+				.addSubcommand(new ReadRowCommand(facade))
+				.addSubcommand(new ReadColumnCommand(facade))
+				.addSubcommand(new EvaluateCellCommand(facade))
+				.addSubcommand(new InsertRowCommand(facade))
+				.addSubcommand(new DeleteRowCommand(facade))
+				.addSubcommand(new SetColumnWidthCommand(facade))
+				.addSubcommand(new AutoFitCommand(facade));
 	}
 
 	@Override

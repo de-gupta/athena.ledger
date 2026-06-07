@@ -1,9 +1,6 @@
 package de.gupta.xl.adapter.poi;
 
-import de.gupta.xl.domain.CellGrid;
-import de.gupta.xl.domain.CellRangeReference;
-import de.gupta.xl.domain.CellReference;
-import de.gupta.xl.domain.CellValue;
+import de.gupta.xl.domain.*;
 import de.gupta.xl.domain.exception.WorkbookNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -424,6 +421,165 @@ final class PoiWorkbookRepositoryITCase
 			assertThat(repository.readCell(file, "NewSheet", CellReference.of("A1")))
 					.as("cell in new sheet")
 					.isEqualTo(new CellValue.Num(42.0));
+		}
+	}
+
+	@Nested
+	@DisplayName("readRow")
+	final class ReadRow
+	{
+		@Test
+		@DisplayName("reads all written cells in the row")
+		void readsAllWrittenCellsInTheRow(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("A1"), new CellValue.Str("alpha"));
+			repository.writeCell(file, "Sheet1", CellReference.of("B1"), new CellValue.Num(42.0));
+
+			var result = repository.readRow(file, "Sheet1", RowReference.of("1"));
+
+			assertThat(result).as("row values")
+			                  .containsExactly(new CellValue.Str("alpha"), new CellValue.Num(42.0));
+		}
+
+		@Test
+		@DisplayName("returns empty list when sheet does not exist")
+		void returnsEmptyListWhenSheetDoesNotExist(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+
+			assertThat(repository.readRow(file, "NoSheet", RowReference.of("1")))
+					.as("missing sheet").isEmpty();
+		}
+	}
+
+	@Nested
+	@DisplayName("readColumn")
+	final class ReadColumn
+	{
+		@Test
+		@DisplayName("reads all written cells in the column")
+		void readsAllWrittenCellsInTheColumn(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("A1"), new CellValue.Str("first"));
+			repository.writeCell(file, "Sheet1", CellReference.of("A2"), new CellValue.Str("second"));
+
+			var result = repository.readColumn(file, "Sheet1", ColumnReference.of("A"));
+
+			assertThat(result).as("column values")
+			                  .containsExactly(new CellValue.Str("first"), new CellValue.Str("second"));
+		}
+	}
+
+	@Nested
+	@DisplayName("evaluateCell")
+	final class EvaluateCell
+	{
+		@Test
+		@DisplayName("returns the formula result as a numeric value")
+		void returnsFormulaResultAsNumericValue(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("A1"), new CellValue.Num(10.0));
+			repository.writeCell(file, "Sheet1", CellReference.of("A2"), new CellValue.Num(20.0));
+			repository.writeCell(file, "Sheet1", CellReference.of("A3"), new CellValue.Formula("SUM(A1:A2)"));
+
+			var result = repository.evaluateCell(file, "Sheet1", CellReference.of("A3"));
+
+			assertThat(result).as("evaluated formula").isEqualTo(new CellValue.Num(30.0));
+		}
+
+		@Test
+		@DisplayName("returns plain value unchanged for non-formula cells")
+		void returnsPlainValueUnchangedForNonFormulaCells(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("B1"), new CellValue.Str("plain"));
+
+			var result = repository.evaluateCell(file, "Sheet1", CellReference.of("B1"));
+
+			assertThat(result).as("plain cell value").isEqualTo(new CellValue.Str("plain"));
+		}
+	}
+
+	@Nested
+	@DisplayName("insertRow")
+	final class InsertRow
+	{
+		@Test
+		@DisplayName("existing row shifts down after insertion")
+		void existingRowShiftsDownAfterInsertion(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("A1"), new CellValue.Str("original"));
+
+			repository.insertRow(file, "Sheet1", RowReference.of("1"));
+
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("A1")))
+					.as("inserted row is blank").isInstanceOf(CellValue.Empty.class);
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("A2")))
+					.as("original data shifted to row 2").isEqualTo(new CellValue.Str("original"));
+		}
+	}
+
+	@Nested
+	@DisplayName("deleteRow")
+	final class DeleteRow
+	{
+		@Test
+		@DisplayName("row below the deleted one shifts up")
+		void rowBelowDeletedOneShiftsUp(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("A1"), new CellValue.Str("delete-me"));
+			repository.writeCell(file, "Sheet1", CellReference.of("A2"), new CellValue.Str("shift-up"));
+
+			repository.deleteRow(file, "Sheet1", RowReference.of("1"));
+
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("A1")))
+					.as("former row 2 now at row 1").isEqualTo(new CellValue.Str("shift-up"));
+		}
+	}
+
+	@Nested
+	@DisplayName("setColumnWidth and autoFit")
+	final class ColumnWidth
+	{
+		@Test
+		@DisplayName("set-col-width does not corrupt workbook data")
+		void setColWidthDoesNotCorruptWorkbookData(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("A1"), new CellValue.Str("data"));
+
+			repository.setColumnWidth(file, "Sheet1", ColumnReference.of("A"), 20);
+
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("A1")))
+					.as("data after width change").isEqualTo(new CellValue.Str("data"));
+		}
+
+		@Test
+		@DisplayName("auto-fit all columns does not corrupt workbook data")
+		void autoFitAllColumnsDoesNotCorruptWorkbookData(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("A1"), new CellValue.Str("hello world"));
+			repository.writeCell(file, "Sheet1", CellReference.of("B1"), new CellValue.Num(42.0));
+
+			repository.autoFitAllColumns(file, "Sheet1");
+
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("A1")))
+					.as("A1 after auto-fit").isEqualTo(new CellValue.Str("hello world"));
 		}
 	}
 }

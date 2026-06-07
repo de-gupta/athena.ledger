@@ -3,6 +3,7 @@ package de.gupta.xl.application.port.out;
 import de.gupta.xl.domain.*;
 
 import java.nio.file.Path;
+import java.util.List;
 
 public interface WorkbookRepository
 {
@@ -32,4 +33,20 @@ public interface WorkbookRepository
 
 	void writeRange(Path file, String sheet, CellReference startReference,
 	                CellGrid grid, boolean overwrite);
+
+	List<CellValue> readRow(Path file, String sheet, RowReference reference);
+
+	List<CellValue> readColumn(Path file, String sheet, ColumnReference reference);
+
+	CellValue evaluateCell(Path file, String sheet, CellReference reference);
+
+	void insertRow(Path file, String sheet, RowReference reference);
+
+	void deleteRow(Path file, String sheet, RowReference reference);
+
+	void setColumnWidth(Path file, String sheet, ColumnReference reference, int characterWidth);
+
+	void autoFitColumn(Path file, String sheet, ColumnReference reference);
+
+	void autoFitAllColumns(Path file, String sheet);
 }

@@ -343,6 +343,214 @@ public final class PoiWorkbookRepository implements WorkbookRepository
 		Files.move(temporaryFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
 	}
 
+	@Override
+	public List<CellValue> readRow(final Path file, final String sheet, final RowReference reference)
+	{
+		requireExists(file);
+		try (var inputStream = Files.newInputStream(file);
+		     var workbook = new XSSFWorkbook(inputStream))
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return List.of();
+			}
+			var row = poiSheet.getRow(reference.index());
+			if (row == null)
+			{
+				return List.of();
+			}
+			var cells = new ArrayList<CellValue>();
+			for (var columnIndex = 0; columnIndex < row.getLastCellNum(); columnIndex++)
+			{
+				var cell = row.getCell(columnIndex);
+				cells.add(cell != null ? toCellValue(cell) : new CellValue.Empty());
+			}
+			return List.copyOf(cells);
+		}
+		catch (IOException caught)
+		{
+			log.error("Failed to read row from workbook: {}", file, caught);
+			throw new IllegalStateException("Failed to read row from workbook: " + file, caught);
+		}
+	}
+
+	@Override
+	public List<CellValue> readColumn(final Path file, final String sheet, final ColumnReference reference)
+	{
+		requireExists(file);
+		try (var inputStream = Files.newInputStream(file);
+		     var workbook = new XSSFWorkbook(inputStream))
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return List.of();
+			}
+			var cells = new ArrayList<CellValue>();
+			for (var rowIndex = 0; rowIndex <= poiSheet.getLastRowNum(); rowIndex++)
+			{
+				var row = poiSheet.getRow(rowIndex);
+				if (row == null)
+				{
+					cells.add(new CellValue.Empty());
+					continue;
+				}
+				var cell = row.getCell(reference.index());
+				cells.add(cell != null ? toCellValue(cell) : new CellValue.Empty());
+			}
+			return List.copyOf(cells);
+		}
+		catch (IOException caught)
+		{
+			log.error("Failed to read column from workbook: {}", file, caught);
+			throw new IllegalStateException("Failed to read column from workbook: " + file, caught);
+		}
+	}
+
+	@Override
+	public CellValue evaluateCell(final Path file, final String sheet, final CellReference reference)
+	{
+		requireExists(file);
+		try (var inputStream = Files.newInputStream(file);
+		     var workbook = new XSSFWorkbook(inputStream))
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return new CellValue.Empty();
+			}
+			var row = poiSheet.getRow(reference.rowIndex());
+			if (row == null)
+			{
+				return new CellValue.Empty();
+			}
+			var cell = row.getCell(reference.columnIndex());
+			if (cell == null)
+			{
+				return new CellValue.Empty();
+			}
+			if (cell.getCellType() != CellType.FORMULA)
+			{
+				return toCellValue(cell);
+			}
+			var evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+			var evaluated = evaluator.evaluate(cell);
+			return switch (evaluated.getCellType())
+			{
+				case NUMERIC -> DateUtil.isCellDateFormatted(cell)
+						? new CellValue.Date(cell.getDateCellValue().toInstant()
+						                         .atZone(ZoneId.systemDefault()).toLocalDate())
+						: new CellValue.Num(evaluated.getNumberValue());
+				case STRING -> new CellValue.Str(evaluated.getStringValue());
+				case BOOLEAN -> new CellValue.Bool(evaluated.getBooleanValue());
+				default -> new CellValue.Empty();
+			};
+		}
+		catch (IOException caught)
+		{
+			log.error("Failed to evaluate cell in workbook: {}", file, caught);
+			throw new IllegalStateException("Failed to evaluate cell in workbook: " + file, caught);
+		}
+	}
+
+	@Override
+	public void insertRow(final Path file, final String sheet, final RowReference reference)
+	{
+		modifyWorkbook(file, workbook ->
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return;
+			}
+			var lastRow = poiSheet.getLastRowNum();
+			if (reference.index() <= lastRow)
+			{
+				poiSheet.shiftRows(reference.index(), lastRow, 1);
+			}
+			poiSheet.createRow(reference.index());
+		});
+	}
+
+	@Override
+	public void deleteRow(final Path file, final String sheet, final RowReference reference)
+	{
+		modifyWorkbook(file, workbook ->
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return;
+			}
+			var row = poiSheet.getRow(reference.index());
+			if (row != null)
+			{
+				poiSheet.removeRow(row);
+			}
+			var lastRow = poiSheet.getLastRowNum();
+			if (reference.index() < lastRow)
+			{
+				poiSheet.shiftRows(reference.index() + 1, lastRow, -1);
+			}
+		});
+	}
+
+	@Override
+	public void setColumnWidth(final Path file, final String sheet,
+	                           final ColumnReference reference, final int characterWidth)
+	{
+		modifyWorkbook(file, workbook ->
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return;
+			}
+			poiSheet.setColumnWidth(reference.index(), characterWidth * 256);
+		});
+	}
+
+	@Override
+	public void autoFitColumn(final Path file, final String sheet, final ColumnReference reference)
+	{
+		modifyWorkbook(file, workbook ->
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return;
+			}
+			poiSheet.autoSizeColumn(reference.index());
+		});
+	}
+
+	@Override
+	public void autoFitAllColumns(final Path file, final String sheet)
+	{
+		modifyWorkbook(file, workbook ->
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return;
+			}
+			var lastColumn = 0;
+			for (var rowIndex = 0; rowIndex <= poiSheet.getLastRowNum(); rowIndex++)
+			{
+				var row = poiSheet.getRow(rowIndex);
+				if (row != null && row.getLastCellNum() > lastColumn)
+				{
+					lastColumn = row.getLastCellNum();
+				}
+			}
+			for (var columnIndex = 0; columnIndex < lastColumn; columnIndex++)
+			{
+				poiSheet.autoSizeColumn(columnIndex);
+			}
+		});
+	}
+
 	@FunctionalInterface
 	private interface WorkbookModification
 	{

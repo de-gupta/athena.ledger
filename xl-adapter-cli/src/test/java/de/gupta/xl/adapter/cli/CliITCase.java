@@ -244,6 +244,169 @@ final class CliITCase
 		}
 	}
 
+	@Nested
+	@DisplayName("read-row")
+	final class ReadRow
+	{
+		@Test
+		@DisplayName("outputs a TSV line of the row values")
+		void outputsATsvLineOfTheRowValues()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "alpha");
+			execute("write", file.toString(), "Sheet1", "B1", "42");
+
+			var output = captureOutput("read-row", file.toString(), "Sheet1", "1");
+
+			assertThat(output).as("row 1 as TSV").isEqualTo("alpha\t42");
+		}
+
+		@Test
+		@DisplayName("outputs typed tokens with --typed flag")
+		void outputsTypedTokensWithTypedFlag()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "hello");
+
+			var output = captureOutput("read-row", file.toString(), "Sheet1", "1", "--typed");
+
+			assertThat(output).as("typed row 1").isEqualTo("STR:hello");
+		}
+	}
+
+	@Nested
+	@DisplayName("read-col")
+	final class ReadColumn
+	{
+		@Test
+		@DisplayName("outputs one value per line for the column")
+		void outputsOneValuePerLineForTheColumn()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "first");
+			execute("write", file.toString(), "Sheet1", "A2", "second");
+
+			var lines = captureOutput("read-col", file.toString(), "Sheet1", "A").lines().toList();
+
+			assertThat(lines).as("column values").containsExactly("first", "second");
+		}
+
+		@Test
+		@DisplayName("accepts 1-based integer column notation")
+		void accepts1BasedIntegerColumnNotation()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "value");
+
+			var output = captureOutput("read-col", file.toString(), "Sheet1", "1");
+
+			assertThat(output).as("column 1 value").isEqualTo("value");
+		}
+	}
+
+	@Nested
+	@DisplayName("evaluate")
+	final class Evaluate
+	{
+		@Test
+		@DisplayName("returns computed formula result")
+		void returnsComputedFormulaResult()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "10");
+			execute("write", file.toString(), "Sheet1", "A2", "20");
+			execute("write", file.toString(), "Sheet1", "A3", "=SUM(A1:A2)", "--type", "FORMULA");
+
+			var output = captureOutput("evaluate", file.toString(), "Sheet1", "A3");
+
+			assertThat(output).as("evaluated formula").isEqualTo("NUM:30.0");
+		}
+
+		@Test
+		@DisplayName("returns plain value for non-formula cell")
+		void returnsPlainValueForNonFormulaCell()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "B1", "hello");
+
+			assertThat(captureOutput("evaluate", file.toString(), "Sheet1", "B1"))
+					.as("plain value").isEqualTo("STR:hello");
+		}
+	}
+
+	@Nested
+	@DisplayName("insert-row and delete-row")
+	final class RowOperations
+	{
+		@Test
+		@DisplayName("insert-row shifts existing data down")
+		void insertRowShiftsExistingDataDown()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "was-row-1");
+			execute("insert-row", file.toString(), "Sheet1", "1");
+
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A2"))
+					.as("original data shifted to row 2").isEqualTo("STR:was-row-1");
+		}
+
+		@Test
+		@DisplayName("delete-row shifts data below it up")
+		void deleteRowShiftsDataBelowItUp()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "delete-me");
+			execute("write", file.toString(), "Sheet1", "A2", "shift-up");
+			execute("delete-row", file.toString(), "Sheet1", "1");
+
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A1"))
+					.as("row 2 shifted to row 1").isEqualTo("STR:shift-up");
+		}
+	}
+
+	@Nested
+	@DisplayName("set-col-width and auto-fit")
+	final class ColumnWidthCommands
+	{
+		@Test
+		@DisplayName("set-col-width exits 0 and preserves cell data")
+		void setColWidthExits0AndPreservesCellData()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "data");
+
+			assertThat(execute("set-col-width", file.toString(), "Sheet1", "A", "25"))
+					.as("exit code").isZero();
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A1"))
+					.as("data preserved").isEqualTo("STR:data");
+		}
+
+		@Test
+		@DisplayName("auto-fit exits 0 and preserves cell data")
+		void autoFitExits0AndPreservesCellData()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "a long value to auto-fit");
+
+			assertThat(execute("auto-fit", file.toString(), "Sheet1"))
+					.as("exit code for all-columns fit").isZero();
+			assertThat(execute("auto-fit", file.toString(), "Sheet1", "A"))
+					.as("exit code for single column fit").isZero();
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A1"))
+					.as("data preserved after auto-fit").isEqualTo("STR:a long value to auto-fit");
+		}
+
+		@Test
+		@DisplayName("set-col-width exits 1 for width zero")
+		void setColWidthExits1ForWidthZero()
+		{
+			execute("create", file.toString());
+
+			assertThat(execute("set-col-width", file.toString(), "Sheet1", "A", "0"))
+					.as("exit code for zero width").isEqualTo(1);
+		}
+	}
+
 	private int executeWithStdin(final String stdinContent, final String... arguments)
 	{
 		var originalIn = System.in;

@@ -281,6 +281,104 @@ xl tab-color position-valuation.xlsx totals       FFC000   # orange
 
 ---
 
+### `xl read-row <file> <sheet> <row> [--typed]`
+
+Read an entire row as a single TSV line. `row` is a 1-based row number.
+
+```
+xl read-row vol-surface.xlsx AAPL 1
+# → strike	2025-07-18	2025-09-19	2026-01-16
+
+xl read-row report.xlsx Sheet1 1 --typed
+# → STR:Name	STR:Score
+```
+
+**Errors:** file not found, invalid row number.
+
+---
+
+### `xl read-col <file> <sheet> <col> [--typed]`
+
+Read an entire column, one value per line. `col` accepts a letter (`A`) or 1-based integer (`1`).
+
+```
+xl read-col positions.xlsx positions A
+# → AAPL
+# → TSLA
+# → NVDA
+```
+
+**Errors:** file not found, invalid column notation.
+
+---
+
+### `xl evaluate <file> <sheet> <cell>`
+
+Read a cell's computed value. For formula cells, evaluates the formula and returns the result as a typed value. For
+non-formula cells, behaves identically to `xl read`.
+
+```
+xl evaluate report.xlsx Sheet1 A3
+# → NUM:30.0   (where A3 contains =SUM(A1:A2))
+```
+
+Output format is identical to `xl read`: `TYPE:value`.
+
+**Errors:** file not found, invalid cell reference.
+
+---
+
+### `xl insert-row <file> <sheet> <row>`
+
+Insert a blank row at the given 1-based position, shifting all existing rows at or below it down by one.
+
+```
+xl insert-row report.xlsx Sheet1 3
+```
+
+**Errors:** file not found, sheet not found, invalid row number.
+
+---
+
+### `xl delete-row <file> <sheet> <row>`
+
+Delete a row and shift all rows below it up by one.
+
+```
+xl delete-row report.xlsx Sheet1 3
+```
+
+**Errors:** file not found, sheet not found, invalid row number.
+
+---
+
+### `xl set-col-width <file> <sheet> <col> <width>`
+
+Set a column width in Excel character units (the same units shown in Excel's column width dialog).
+
+```
+xl set-col-width report.xlsx Sheet1 A 20
+xl set-col-width report.xlsx Sheet1 3 15
+```
+
+**Errors:** file not found, sheet not found, invalid column notation, width less than 1.
+
+---
+
+### `xl auto-fit <file> <sheet> [<col>]`
+
+Auto-fit column widths to their content. If `col` is omitted, fits all columns in the sheet.
+
+```
+xl auto-fit report.xlsx Sheet1          # fit all columns
+xl auto-fit report.xlsx Sheet1 B        # fit column B only
+xl auto-fit report.xlsx Sheet1 2        # fit column 2 (B) only
+```
+
+**Errors:** file not found, sheet not found.
+
+---
+
 ## Java API
 
 ### Dependency
@@ -709,6 +807,88 @@ Fallible<Void> setTabColor(Path file, String sheet, String hexRgb)
 
 ---
 
+#### `readRow`
+
+```java
+Fallible<List<CellValue>> readRow(Path file, String sheet, String rowRef)
+```
+
+`rowRef` is a 1-based row number string. Returns values for every used cell in the row; missing cells return
+`CellValue.Empty`.
+
+---
+
+#### `readColumn`
+
+```java
+Fallible<List<CellValue>> readColumn(Path file, String sheet, String columnRef)
+```
+
+`columnRef` accepts letter (`"A"`) or 1-based integer (`"1"`). Returns one `CellValue` per row from row 0 to the sheet's
+last used row.
+
+---
+
+#### `evaluateCell`
+
+```java
+Fallible<CellValue> evaluateCell(Path file, String sheet, String cellReference)
+```
+
+For formula cells, evaluates the formula and returns the computed typed value (`Num`, `Str`, `Bool`). For non-formula
+cells, behaves identically to `readCell`.
+
+---
+
+#### `insertRow`
+
+```java
+Fallible<Void> insertRow(Path file, String sheet, String rowRef)
+```
+
+Inserts a blank row at the 1-based `rowRef`, shifting existing rows at or below it down by one.
+
+**Failures:** `WorkbookNotFoundException`, `SheetNotFoundException`, `IllegalArgumentException` (invalid row).
+
+---
+
+#### `deleteRow`
+
+```java
+Fallible<Void> deleteRow(Path file, String sheet, String rowRef)
+```
+
+Deletes the row and shifts all rows below it up by one. Deleting a non-existent row is a no-op.
+
+**Failures:** `WorkbookNotFoundException`, `SheetNotFoundException`, `IllegalArgumentException` (invalid row).
+
+---
+
+#### `setColumnWidth`
+
+```java
+Fallible<Void> setColumnWidth(Path file, String sheet, String columnRef, int characterWidth)
+```
+
+`characterWidth` uses the same units Excel shows in the column width dialog.
+
+**Failures:** `WorkbookNotFoundException`, `SheetNotFoundException`, `IllegalArgumentException`.
+
+---
+
+#### `autoFitColumn` / `autoFitAllColumns`
+
+```java
+Fallible<Void> autoFitColumn(Path file, String sheet, String columnRef)
+Fallible<Void> autoFitAllColumns(Path file, String sheet)
+```
+
+Auto-size one or all columns to fit their content.
+
+**Failures:** `WorkbookNotFoundException`, `SheetNotFoundException`.
+
+---
+
 ### Domain types (package `de.gupta.xl.domain`)
 
 | Type                 | Description                                                                                             |
@@ -718,6 +898,7 @@ Fallible<Void> setTabColor(Path file, String sheet, String hexRgb)
 | `CellGrid`           | Immutable 2D table; `CellGrid.of(rows)`, `CellGrid.empty()`, `rowCount()`, `columnCount()`, `isEmpty()` |
 | `CellRangeReference` | Rectangular range address; `CellRangeReference.of("A1","C5")`, `rowCount()`, `columnCount()`            |
 | `ColumnReference`    | Column address; `ColumnReference.of("C")` or `ColumnReference.of("3")` → `index()` (0-based)            |
+| `RowReference`       | Row address; `RowReference.of("1")` → `index()` (0-based); only 1-based integers accepted               |
 | `TabColor`           | RGB tab color; `TabColor.of("70AD47")` → `red()`, `green()`, `blue()`                                   |
 | `Sheet`              | Record: `name()`, `rowCount()`                                                                          |
 | `WorkbookContent`    | Record: `path()`, `sheets()`                                                                            |

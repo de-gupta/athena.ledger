@@ -446,4 +446,56 @@ final class WorkbookServiceTest
             verify(repository).deleteColumn(file, "Sheet1", 2);
         }
     }
+
+    @Nested
+    @DisplayName("insertRow")
+    final class InsertRow
+    {
+        @Test
+        @DisplayName("throws SheetNotFoundException when sheet does not exist")
+        void throwsWhenSheetDoesNotExist(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+            when(repository.load(file)).thenReturn(workbookWith(file, "Sheet1"));
+
+            assertThatThrownBy(() -> service.insertRow(file, "Missing", "1"))
+                    .isInstanceOf(de.gupta.xl.domain.exception.SheetNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("throws IllegalArgumentException for row zero")
+        void throwsForRowZero(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+
+            assertThatThrownBy(() -> service.insertRow(file, "Sheet1", "0"))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("setColumnWidth")
+    final class SetColumnWidth
+    {
+        @Test
+        @DisplayName("throws SheetNotFoundException when sheet does not exist")
+        void throwsWhenSheetDoesNotExist(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+            when(repository.load(file)).thenReturn(workbookWith(file, "Sheet1"));
+
+            assertThatThrownBy(() -> service.setColumnWidth(file, "Missing", "A", 15))
+                    .isInstanceOf(de.gupta.xl.domain.exception.SheetNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("throws IllegalArgumentException when width is less than 1")
+        void throwsWhenWidthIsLessThan1(@TempDir final Path directory)
+        {
+            var file = directory.resolve("workbook.xlsx");
+
+            assertThatThrownBy(() -> service.setColumnWidth(file, "Sheet1", "A", 0))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
 }

@@ -37,4 +37,20 @@ public interface XlFacade
 	Fallible<Void> deleteColumn(Path file, String sheet, String columnNotation);
 
 	Fallible<Void> setTabColor(Path file, String sheet, String hexRgb);
+
+	Fallible<List<CellValue>> readRow(Path file, String sheet, String rowRef);
+
+	Fallible<List<CellValue>> readColumn(Path file, String sheet, String columnRef);
+
+	Fallible<CellValue> evaluateCell(Path file, String sheet, String cellReference);
+
+	Fallible<Void> insertRow(Path file, String sheet, String rowRef);
+
+	Fallible<Void> deleteRow(Path file, String sheet, String rowRef);
+
+	Fallible<Void> setColumnWidth(Path file, String sheet, String columnRef, int characterWidth);
+
+	Fallible<Void> autoFitColumn(Path file, String sheet, String columnRef);
+
+	Fallible<Void> autoFitAllColumns(Path file, String sheet);
 }

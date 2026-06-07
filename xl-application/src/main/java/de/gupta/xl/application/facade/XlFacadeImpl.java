@@ -139,4 +139,73 @@ public final class XlFacadeImpl implements XlFacade
             return null;
         });
     }
+
+    @Override
+    public Fallible<List<CellValue>> readRow(final Path file, final String sheet, final String rowRef)
+    {
+        return Fallible.<Void>beckon(null).map(_ -> workbookService.readRow(file, sheet, rowRef));
+    }
+
+    @Override
+    public Fallible<List<CellValue>> readColumn(final Path file, final String sheet, final String columnRef)
+    {
+        return Fallible.<Void>beckon(null).map(_ -> workbookService.readColumn(file, sheet, columnRef));
+    }
+
+    @Override
+    public Fallible<CellValue> evaluateCell(final Path file, final String sheet, final String cellReference)
+    {
+        return Fallible.<Void>beckon(null).map(_ -> workbookService.evaluateCell(file, sheet, cellReference));
+    }
+
+    @Override
+    public Fallible<Void> insertRow(final Path file, final String sheet, final String rowRef)
+    {
+        return Fallible.<Void>beckon(null).map(_ ->
+        {
+            workbookService.insertRow(file, sheet, rowRef);
+            return null;
+        });
+    }
+
+    @Override
+    public Fallible<Void> deleteRow(final Path file, final String sheet, final String rowRef)
+    {
+        return Fallible.<Void>beckon(null).map(_ ->
+        {
+            workbookService.deleteRow(file, sheet, rowRef);
+            return null;
+        });
+    }
+
+    @Override
+    public Fallible<Void> setColumnWidth(final Path file, final String sheet,
+                                         final String columnRef, final int characterWidth)
+    {
+        return Fallible.<Void>beckon(null).map(_ ->
+        {
+            workbookService.setColumnWidth(file, sheet, columnRef, characterWidth);
+            return null;
+        });
+    }
+
+    @Override
+    public Fallible<Void> autoFitColumn(final Path file, final String sheet, final String columnRef)
+    {
+        return Fallible.<Void>beckon(null).map(_ ->
+        {
+            workbookService.autoFitColumn(file, sheet, columnRef);
+            return null;
+        });
+    }
+
+    @Override
+    public Fallible<Void> autoFitAllColumns(final Path file, final String sheet)
+    {
+        return Fallible.<Void>beckon(null).map(_ ->
+        {
+            workbookService.autoFitAllColumns(file, sheet);
+            return null;
+        });
+    }
 }
