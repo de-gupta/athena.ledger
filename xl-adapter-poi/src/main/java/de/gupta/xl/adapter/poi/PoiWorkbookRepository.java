@@ -1,0 +1,241 @@
+package de.gupta.xl.adapter.poi;
+
+import de.gupta.xl.application.port.out.WorkbookRepository;
+import de.gupta.xl.domain.CellReference;
+import de.gupta.xl.domain.CellValue;
+import de.gupta.xl.domain.Sheet;
+import de.gupta.xl.domain.WorkbookContent;
+import de.gupta.xl.domain.exception.WorkbookNotFoundException;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.DateUtil;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+
+public final class PoiWorkbookRepository implements WorkbookRepository
+{
+	private static final Logger log = LoggerFactory.getLogger(PoiWorkbookRepository.class);
+
+	@Override
+	public WorkbookContent load(final Path file)
+	{
+		requireExists(file);
+		try (var inputStream = Files.newInputStream(file);
+		     var workbook = new XSSFWorkbook(inputStream))
+		{
+			var sheets = new ArrayList<Sheet>();
+			for (var index = 0; index < workbook.getNumberOfSheets(); index++)
+			{
+				var poiSheet = workbook.getSheetAt(index);
+				sheets.add(new Sheet(poiSheet.getSheetName(), poiSheet.getPhysicalNumberOfRows()));
+			}
+			return new WorkbookContent(file, List.copyOf(sheets));
+		}
+		catch (IOException caught)
+		{
+			log.error("Failed to load workbook: {}", file, caught);
+			throw new IllegalStateException("Failed to load workbook: " + file, caught);
+		}
+	}
+
+	@Override
+	public void createWorkbook(final Path file)
+	{
+		try (var workbook = new XSSFWorkbook())
+		{
+			workbook.createSheet("Sheet1");
+			writeAtomically(file, workbook);
+		}
+		catch (IOException caught)
+		{
+			log.error("Failed to create workbook: {}", file, caught);
+			throw new IllegalStateException("Failed to create workbook: " + file, caught);
+		}
+	}
+
+	@Override
+	public void addSheet(final Path file, final String sheetName)
+	{
+		modifyWorkbook(file, workbook -> workbook.createSheet(sheetName));
+	}
+
+	@Override
+	public void deleteSheet(final Path file, final String sheetName)
+	{
+		modifyWorkbook(file, workbook ->
+		{
+			var sheetIndex = workbook.getSheetIndex(sheetName);
+			workbook.removeSheetAt(sheetIndex);
+		});
+	}
+
+	@Override
+	public void copySheet(final Path file, final String sourceSheet, final String targetName)
+	{
+		modifyWorkbook(file, workbook ->
+		{
+			var sourceIndex = workbook.getSheetIndex(sourceSheet);
+			var cloned = workbook.cloneSheet(sourceIndex);
+			workbook.setSheetName(workbook.getSheetIndex(cloned), targetName);
+		});
+	}
+
+	@Override
+	public CellValue readCell(final Path file, final String sheet, final CellReference reference)
+	{
+		requireExists(file);
+		try (var inputStream = Files.newInputStream(file);
+		     var workbook = new XSSFWorkbook(inputStream))
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return new CellValue.Empty();
+			}
+			var row = poiSheet.getRow(reference.rowIndex());
+			if (row == null)
+			{
+				return new CellValue.Empty();
+			}
+			var cell = row.getCell(reference.columnIndex());
+			if (cell == null)
+			{
+				return new CellValue.Empty();
+			}
+			return toCellValue(cell);
+		}
+		catch (IOException caught)
+		{
+			log.error("Failed to read cell from workbook: {}", file, caught);
+			throw new IllegalStateException("Failed to read cell from workbook: " + file, caught);
+		}
+	}
+
+	@Override
+	public void writeCell(final Path file, final String sheet, final CellReference reference, final CellValue value)
+	{
+		requireExists(file);
+		modifyWorkbook(file, workbook ->
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				poiSheet = workbook.createSheet(sheet);
+			}
+			var row = poiSheet.getRow(reference.rowIndex());
+			if (row == null)
+			{
+				row = poiSheet.createRow(reference.rowIndex());
+			}
+			var cell = row.getCell(reference.columnIndex());
+			if (cell == null)
+			{
+				cell = row.createCell(reference.columnIndex());
+			}
+			applyCellValue(workbook, cell, value);
+		});
+	}
+
+	private static CellValue toCellValue(final Cell cell)
+	{
+		return switch (cell.getCellType())
+		{
+			case STRING -> new CellValue.Str(cell.getStringCellValue());
+			case BOOLEAN -> new CellValue.Bool(cell.getBooleanCellValue());
+			case NUMERIC ->
+			{
+				if (DateUtil.isCellDateFormatted(cell))
+				{
+					var localDate = cell.getDateCellValue().toInstant()
+					                    .atZone(ZoneId.systemDefault()).toLocalDate();
+					yield new CellValue.Date(localDate);
+				}
+				yield new CellValue.Num(cell.getNumericCellValue());
+			}
+			case FORMULA -> new CellValue.Formula(cell.getCellFormula());
+			case BLANK, ERROR, _NONE -> new CellValue.Empty();
+		};
+	}
+
+	private static void applyCellValue(final XSSFWorkbook workbook, final Cell cell, final CellValue value)
+	{
+		switch (value)
+		{
+			case CellValue.Str(var string) -> cell.setCellValue(string);
+			case CellValue.Num(var number) -> cell.setCellValue(number);
+			case CellValue.Bool(var bool) -> cell.setCellValue(bool);
+			case CellValue.Date(LocalDate date) ->
+			{
+				cell.setCellValue(date);
+				var style = workbook.createCellStyle();
+				var format = workbook.getCreationHelper().createDataFormat();
+				style.setDataFormat(format.getFormat("yyyy-mm-dd"));
+				cell.setCellStyle(style);
+			}
+			case CellValue.Formula(var expression) -> cell.setCellFormula(expression);
+			case CellValue.Empty() -> cell.setBlank();
+		}
+	}
+
+	private static void requireExists(final Path file)
+	{
+		if (!Files.exists(file))
+		{
+			throw WorkbookNotFoundException.forFile(file);
+		}
+	}
+
+	private void modifyWorkbook(final Path file, final WorkbookModification modification)
+	{
+		requireExists(file);
+		try (var inputStream = Files.newInputStream(file);
+		     var workbook = new XSSFWorkbook(inputStream))
+		{
+			modification.apply(workbook);
+			writeAtomically(file, workbook);
+		}
+		catch (IOException caught)
+		{
+			log.error("Failed to modify workbook: {}", file, caught);
+			throw new IllegalStateException("Failed to modify workbook: " + file, caught);
+		}
+	}
+
+	private void writeAtomically(final Path file, final XSSFWorkbook workbook) throws IOException
+	{
+		var temporaryFile = file.resolveSibling(file.getFileName() + ".temporary");
+		try (OutputStream outputStream = Files.newOutputStream(temporaryFile))
+		{
+			workbook.write(outputStream);
+		}
+		catch (IOException caught)
+		{
+			try
+			{
+				Files.deleteIfExists(temporaryFile);
+			}
+			catch (IOException deleteException)
+			{
+				log.error("Failed to delete temporary file: {}", temporaryFile, deleteException);
+			}
+			throw caught;
+		}
+		Files.move(temporaryFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+	}
+
+	@FunctionalInterface
+	private interface WorkbookModification
+	{
+		void apply(XSSFWorkbook workbook) throws IOException;
+	}
+}

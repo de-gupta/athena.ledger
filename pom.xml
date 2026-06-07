@@ -9,8 +9,17 @@
     </parent>
 
     <name>athena.ledger</name>
-    <artifactId>${project.name}</artifactId>
+    <artifactId>athena.ledger</artifactId>
     <version>0.0.3-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>xl-domain</module>
+        <module>xl-application</module>
+        <module>xl-adapter-poi</module>
+        <module>xl-adapter-cli</module>
+        <module>xl-assembly</module>
+    </modules>
 
     <scm>
         <connection>scm:git:ssh://git@github.com/de-gupta/athena.ledger.git</connection>
@@ -18,5 +27,91 @@
         <url>https://github.com/de-gupta/athena.ledger.git</url>
         <tag>HEAD</tag>
     </scm>
+
+    <properties>
+        <argLine></argLine>
+        <aletheia.version>0.10.0</aletheia.version>
+        <athena.version>0.6.3</athena.version>
+        <picocli.version>4.7.6</picocli.version>
+        <poi.version>5.3.0</poi.version>
+        <maven.shade.plugin.version>3.6.0</maven.shade.plugin.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.github.de-gupta</groupId>
+                <artifactId>aletheia</artifactId>
+                <version>${aletheia.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.de-gupta</groupId>
+                <artifactId>athena</artifactId>
+                <version>${athena.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>info.picocli</groupId>
+                <artifactId>picocli</artifactId>
+                <version>${picocli.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.poi</groupId>
+                <artifactId>poi-ooxml</artifactId>
+                <version>${poi.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.de-gupta</groupId>
+                <artifactId>xl-domain</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.de-gupta</groupId>
+                <artifactId>xl-application</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.de-gupta</groupId>
+                <artifactId>xl-adapter-poi</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.de-gupta</groupId>
+                <artifactId>xl-adapter-cli</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <configuration>
+                        <useModulePath>false</useModulePath>
+                        <excludes>
+                            <exclude>**/*ITCase.java</exclude>
+                        </excludes>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <configuration>
+                        <useModulePath>false</useModulePath>
+                        <includes>
+                            <include>**/*ITCase.java</include>
+                        </includes>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-shade-plugin</artifactId>
+                    <version>${maven.shade.plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
 
 </project>
