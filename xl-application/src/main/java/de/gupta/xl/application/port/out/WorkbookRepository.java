@@ -1,5 +1,7 @@
 package de.gupta.xl.application.port.out;
 
+import de.gupta.xl.application.transfer.BatchOperation;
+import de.gupta.xl.application.transfer.CellFormat;
 import de.gupta.xl.domain.*;
 
 import java.nio.file.Path;
@@ -59,4 +61,12 @@ public interface WorkbookRepository
 	int findRow(Path file, String sheet, ColumnReference reference, String displayValue);
 
 	CellRangeReference dims(Path file, String sheet);
+
+	void formatCell(Path file, String sheet, CellReference reference, CellFormat format);
+
+	void formatRange(Path file, String sheet, CellRangeReference range, CellFormat format);
+
+	void freezePanes(Path file, String sheet, int frozenRows, int frozenColumns);
+
+	void batch(Path file, List<BatchOperation> operations);
 }

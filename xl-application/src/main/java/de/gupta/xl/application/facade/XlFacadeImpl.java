@@ -3,10 +3,7 @@ package de.gupta.xl.application.facade;
 import de.gupta.aletheia.trials.Fallible;
 import de.gupta.xl.application.port.in.XlFacade;
 import de.gupta.xl.application.service.WorkbookService;
-import de.gupta.xl.application.transfer.RangeStats;
-import de.gupta.xl.application.transfer.SheetSummary;
-import de.gupta.xl.application.transfer.WriteCellRequest;
-import de.gupta.xl.application.transfer.WriteRangeRequest;
+import de.gupta.xl.application.transfer.*;
 import de.gupta.xl.domain.CellGrid;
 import de.gupta.xl.domain.CellValue;
 
@@ -302,6 +299,50 @@ public final class XlFacadeImpl implements XlFacade
 			var parts = dimsString.split(":");
 			var grid = workbookService.readRange(xlFile, sheet, parts[0], parts[1]);
 			CsvExporter.write(grid, csvFile, delimiter);
+			return null;
+		});
+	}
+
+
+	@Override
+	public Fallible<Void> formatCell(final Path file, final String sheet,
+	                                 final String cellRef, final CellFormat format)
+	{
+		return Fallible.<Void>beckon(null).map(_ ->
+		{
+			workbookService.formatCell(file, sheet, cellRef, format);
+			return null;
+		});
+	}
+
+	@Override
+	public Fallible<Void> formatRange(final Path file, final String sheet,
+	                                  final String fromCell, final String toCell, final CellFormat format)
+	{
+		return Fallible.<Void>beckon(null).map(_ ->
+		{
+			workbookService.formatRange(file, sheet, fromCell, toCell, format);
+			return null;
+		});
+	}
+
+	@Override
+	public Fallible<Void> freezePanes(final Path file, final String sheet,
+	                                  final int frozenRows, final int frozenColumns)
+	{
+		return Fallible.<Void>beckon(null).map(_ ->
+		{
+			workbookService.freezePanes(file, sheet, frozenRows, frozenColumns);
+			return null;
+		});
+	}
+
+	@Override
+	public Fallible<Void> batch(final Path file, final List<BatchOperation> operations)
+	{
+		return Fallible.<Void>beckon(null).map(_ ->
+		{
+			workbookService.batch(file, operations);
 			return null;
 		});
 	}

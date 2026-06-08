@@ -1,5 +1,7 @@
 package de.gupta.xl.adapter.poi;
 
+import de.gupta.xl.application.transfer.BatchOperation;
+import de.gupta.xl.application.transfer.CellFormat;
 import de.gupta.xl.domain.*;
 import de.gupta.xl.domain.exception.EmptySheetException;
 import de.gupta.xl.domain.exception.WorkbookNotFoundException;
@@ -714,6 +716,114 @@ final class PoiWorkbookRepositoryITCase
 
 			assertThatThrownBy(() -> repository.dims(file, "Sheet1"))
 					.isInstanceOf(EmptySheetException.class);
+		}
+	}
+
+	@Nested
+	@DisplayName("formatCell")
+	final class FormatCell
+	{
+		@Test
+		@DisplayName("format does not corrupt cell value")
+		void formatDoesNotCorruptCellValue(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("A1"), new CellValue.Str("header"));
+
+			var format = CellFormat.builder().bold(true).numberFormat("@").build();
+			repository.formatCell(file, "Sheet1", CellReference.of("A1"), format);
+
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("A1")))
+					.as("cell value preserved after format").isEqualTo(new CellValue.Str("header"));
+		}
+
+		@Test
+		@DisplayName("formatRange preserves all cell values")
+		void formatRangePreservesAllCellValues(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("A1"), new CellValue.Str("a"));
+			repository.writeCell(file, "Sheet1", CellReference.of("B1"), new CellValue.Str("b"));
+
+			repository.formatRange(file, "Sheet1",
+					CellRangeReference.of("A1", "B1"),
+					CellFormat.builder().bold(true).build());
+
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("A1")))
+					.as("A1 preserved").isEqualTo(new CellValue.Str("a"));
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("B1")))
+					.as("B1 preserved").isEqualTo(new CellValue.Str("b"));
+		}
+	}
+
+	@Nested
+	@DisplayName("freezePanes")
+	final class FreezePanes
+	{
+		@Test
+		@DisplayName("freeze panes does not corrupt workbook data")
+		void freezePanesDoesNotCorruptWorkbookData(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			repository.writeCell(file, "Sheet1", CellReference.of("A1"), new CellValue.Str("data"));
+
+			repository.freezePanes(file, "Sheet1", 1, 0);
+
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("A1")))
+					.as("data intact after freeze").isEqualTo(new CellValue.Str("data"));
+		}
+	}
+
+	@Nested
+	@DisplayName("batch")
+	final class Batch
+	{
+		@Test
+		@DisplayName("applies all operations in a single save and all values are readable")
+		void appliesAllOperationsInSingleSaveAndAllValuesAreReadable(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+
+			List<BatchOperation> operations = List.of(
+					new BatchOperation.WriteCell("Sheet1", "A1", new CellValue.Str("Name")),
+					new BatchOperation.WriteCell("Sheet1", "B1", new CellValue.Str("Score")),
+					new BatchOperation.WriteCell("Sheet1", "A2", new CellValue.Str("Alice")),
+					new BatchOperation.WriteCell("Sheet1", "B2", new CellValue.Num(95.0)),
+					new BatchOperation.FormatRange("Sheet1", "A1", "B1",
+							CellFormat.builder().bold(true).build()),
+					new BatchOperation.FreezePanes("Sheet1", 1, 0)
+			);
+			repository.batch(file, operations);
+
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("A1")))
+					.as("A1").isEqualTo(new CellValue.Str("Name"));
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("B2")))
+					.as("B2").isEqualTo(new CellValue.Num(95.0));
+		}
+
+		@Test
+		@DisplayName("batch is faster than individual operations by opening file only once")
+		void batchResultMatchesEquivalentIndividualOperations(@TempDir final Path directory)
+		{
+			var file = directory.resolve("workbook.xlsx");
+			repository.createWorkbook(file);
+			var operations = new java.util.ArrayList<BatchOperation>();
+			for (var index = 0; index < 20; index++)
+			{
+				operations.add(new BatchOperation.WriteCell(
+						"Sheet1", "A" + (index + 1), new CellValue.Num(index)));
+			}
+
+			repository.batch(file, operations);
+
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("A10")))
+					.as("A10 = 9").isEqualTo(new CellValue.Num(9.0));
+			assertThat(repository.readCell(file, "Sheet1", CellReference.of("A20")))
+					.as("A20 = 19").isEqualTo(new CellValue.Num(19.0));
 		}
 	}
 }

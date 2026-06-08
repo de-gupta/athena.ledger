@@ -2,9 +2,7 @@ package de.gupta.xl.application.service;
 
 import de.gupta.commons.utility.string.StringSanitizationUtility;
 import de.gupta.xl.application.port.out.WorkbookRepository;
-import de.gupta.xl.application.transfer.SheetSummary;
-import de.gupta.xl.application.transfer.WriteCellRequest;
-import de.gupta.xl.application.transfer.WriteRangeRequest;
+import de.gupta.xl.application.transfer.*;
 import de.gupta.xl.domain.*;
 import de.gupta.xl.domain.exception.*;
 
@@ -310,6 +308,47 @@ public final class WorkbookService
                 + ColumnReference.toLetters(range.bottomRight().columnIndex())
                 + (range.bottomRight().rowIndex() + 1);
     }
+
+
+	public void formatCell(final Path file, final String sheet, final String cellRef, final CellFormat format)
+	{
+		StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+		StringSanitizationUtility.requireNotBlank(cellRef, "Cell reference must not be blank");
+		var parsedRef = CellReference.of(cellRef);
+		requireSheetExists(file, sheet);
+		repository.formatCell(file, sheet, parsedRef, format);
+	}
+
+	public void formatRange(final Path file, final String sheet,
+	                        final String fromCell, final String toCell, final CellFormat format)
+	{
+		StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+		StringSanitizationUtility.requireNotBlank(fromCell, "From cell must not be blank");
+		StringSanitizationUtility.requireNotBlank(toCell, "To cell must not be blank");
+		var range = CellRangeReference.of(fromCell, toCell);
+		requireSheetExists(file, sheet);
+		repository.formatRange(file, sheet, range, format);
+	}
+
+	public void freezePanes(final Path file, final String sheet, final int frozenRows, final int frozenColumns)
+	{
+		StringSanitizationUtility.requireNotBlank(sheet, "Sheet name must not be blank");
+		if (frozenRows < 0 || frozenColumns < 0)
+		{
+			throw new IllegalArgumentException("Frozen row and column counts must be non-negative");
+		}
+		requireSheetExists(file, sheet);
+		repository.freezePanes(file, sheet, frozenRows, frozenColumns);
+	}
+
+	public void batch(final Path file, final List<BatchOperation> operations)
+	{
+		if (operations.isEmpty())
+		{
+			return;
+		}
+		repository.batch(file, operations);
+	}
 
     private void requireSheetExists(final Path file, final String sheet)
     {

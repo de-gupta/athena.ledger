@@ -32,33 +32,37 @@ numeric → `NUM`; anything else → `STR`. For `FORMULA`, leading `=` is option
 
 ### Command summary
 
-| Command                                                                                   | Purpose                                                     |
-|-------------------------------------------------------------------------------------------|-------------------------------------------------------------|
-| `xl sheets <file>`                                                                        | list sheets with row counts                                 |
-| `xl read <file> <sheet> <cell>`                                                           | read one cell → `TYPE:value`                                |
-| `xl write <file> <sheet> <cell> <value> [--type TYPE]`                                    | write one cell                                              |
-| `xl read-range <file> <sheet> <from> <to> [--typed]`                                      | read rectangular range → TSV                                |
-| `xl write-range <file> <sheet> <start-cell> [--overwrite]`                                | write TSV from stdin                                        |
-| `xl read-row <file> <sheet> <row> [--typed]`                                              | read entire row → single TSV line                           |
-| `xl read-col <file> <sheet> <col> [--typed]`                                              | read entire column → one value per line                     |
-| `xl evaluate <file> <sheet> <cell>`                                                       | read computed value; evaluates formula cells → `TYPE:value` |
-| `xl import-csv <file> <sheet> <csv-file> [--start-cell A1] [--overwrite] [--delimiter ,]` | import CSV file into sheet                                  |
-| `xl create <file> [--overwrite]`                                                          | create new workbook                                         |
-| `xl add-sheet <file> <name>`                                                              | add blank sheet                                             |
-| `xl rename-sheet <file> <name> <new-name>`                                                | rename sheet in place                                       |
-| `xl delete-sheet <file> <name>`                                                           | delete sheet (fails if last)                                |
-| `xl copy-sheet <file> <source> <new-name>`                                                | copy sheet within workbook                                  |
-| `xl move-sheet <file> <name> <position>`                                                  | reorder sheet (0-based position)                            |
-| `xl insert-row <file> <sheet> <row>`                                                      | insert blank row, shift down                                |
-| `xl delete-row <file> <sheet> <row>`                                                      | delete row, shift up                                        |
-| `xl delete-column <file> <sheet> <col>`                                                   | delete column, shift left                                   |
-| `xl set-col-width <file> <sheet> <col> <width>`                                           | set column width in character units                         |
-| `xl auto-fit <file> <sheet> [<col>]`                                                      | auto-fit one or all columns                                 |
-| `xl tab-color <file> <sheet> <hex-rgb>`                                                   | set sheet tab color                                         |
-| `xl find-col <file> <sheet> <header>`                                                     | find column letter of named header in first row             |
-| `xl insert-col <file> <sheet> <col>`                                                      | insert column at position, shift right, fill from stdin     |
-| `xl append-col <file> <sheet>`                                                            | append column after last occupied, fill from stdin          |
-| `xl stats <file> <sheet> <from> <to>`                                                     | compute count/min/max/mean/stdev over numeric range         |
+| Command                                                                                   | Purpose                                                      |
+|-------------------------------------------------------------------------------------------|--------------------------------------------------------------|
+| `xl sheets <file>`                                                                        | list sheets with row counts                                  |
+| `xl read <file> <sheet> <cell>`                                                           | read one cell → `TYPE:value`                                 |
+| `xl write <file> <sheet> <cell> <value> [--type TYPE]`                                    | write one cell                                               |
+| `xl read-range <file> <sheet> <from> <to> [--typed]`                                      | read rectangular range → TSV                                 |
+| `xl write-range <file> <sheet> <start-cell> [--overwrite]`                                | write TSV from stdin                                         |
+| `xl read-row <file> <sheet> <row> [--typed]`                                              | read entire row → single TSV line                            |
+| `xl read-col <file> <sheet> <col> [--typed]`                                              | read entire column → one value per line                      |
+| `xl evaluate <file> <sheet> <cell>`                                                       | read computed value; evaluates formula cells → `TYPE:value`  |
+| `xl import-csv <file> <sheet> <csv-file> [--start-cell A1] [--overwrite] [--delimiter ,]` | import CSV file into sheet                                   |
+| `xl create <file> [--overwrite]`                                                          | create new workbook                                          |
+| `xl add-sheet <file> <name>`                                                              | add blank sheet                                              |
+| `xl rename-sheet <file> <name> <new-name>`                                                | rename sheet in place                                        |
+| `xl delete-sheet <file> <name>`                                                           | delete sheet (fails if last)                                 |
+| `xl copy-sheet <file> <source> <new-name>`                                                | copy sheet within workbook                                   |
+| `xl move-sheet <file> <name> <position>`                                                  | reorder sheet (0-based position)                             |
+| `xl insert-row <file> <sheet> <row>`                                                      | insert blank row, shift down                                 |
+| `xl delete-row <file> <sheet> <row>`                                                      | delete row, shift up                                         |
+| `xl delete-column <file> <sheet> <col>`                                                   | delete column, shift left                                    |
+| `xl set-col-width <file> <sheet> <col> <width>`                                           | set column width in character units                          |
+| `xl auto-fit <file> <sheet> [<col>]`                                                      | auto-fit one or all columns                                  |
+| `xl tab-color <file> <sheet> <hex-rgb>`                                                   | set sheet tab color                                          |
+| `xl find-col <file> <sheet> <header>`                                                     | find column letter of named header in first row              |
+| `xl insert-col <file> <sheet> <col>`                                                      | insert column at position, shift right, fill from stdin      |
+| `xl append-col <file> <sheet>`                                                            | append column after last occupied, fill from stdin           |
+| `xl stats <file> <sheet> <from> <to>`                                                     | compute count/min/max/mean/stdev over numeric range          |
+| `xl format-cell <file> <sheet> <cell> [--bold] [--italic] [--number-format FMT] ...`      | apply formatting to one cell                                 |
+| `xl format-range <file> <sheet> <from> <to> [same options]`                               | apply uniform formatting to a rectangular range              |
+| `xl freeze-panes <file> <sheet> <frozen-rows> <frozen-cols>`                              | freeze rows/columns for scrolling                            |
+| `xl batch <file>`                                                                         | apply multiple operations in one open/save cycle (stdin DSL) |
 
 ---
 
@@ -582,6 +586,103 @@ as `YYYY-MM-DD` and re-infer as `DATE` on import. Formula cells export their las
 expression is lost.
 
 **Errors:** file not found, sheet not found, sheet is empty, output file not writable.
+
+---
+
+### `xl format-cell <file> <sheet> <cell> [options]`
+
+Apply formatting to a single cell. Existing style is preserved for any option not specified.
+
+```bash
+xl format-cell report.xlsx Sheet1 A1 --bold
+xl format-cell report.xlsx Sheet1 B2 --number-format "0.0000"
+xl format-cell report.xlsx Sheet1 C3 --bold --italic --font-color FF0000
+xl format-cell report.xlsx Sheet1 A1 --bg-color 4472C4 --font-color FFFFFF
+```
+
+**Options:**
+
+| Option                   | Description                                                 |
+|--------------------------|-------------------------------------------------------------|
+| `--number-format <code>` | Excel format code, e.g. `0.0000`, `$#,##0.00`, `yyyy-mm-dd` |
+| `--bold`                 | Bold text                                                   |
+| `--italic`               | Italic text                                                 |
+| `--font-color <hex>`     | Font colour as 6-digit hex RGB (e.g. `FF0000`)              |
+| `--bg-color <hex>`       | Background fill colour as 6-digit hex RGB                   |
+
+**Errors:** file not found, sheet not found.
+
+---
+
+### `xl format-range <file> <sheet> <from> <to> [options]`
+
+Apply uniform formatting to a rectangular range of cells. All cells in the range receive the same new style — this will
+overwrite any per-cell styles within the range (e.g. date formats). Use `format-cell` when you need to preserve per-cell
+style variation.
+
+```bash
+xl format-range report.xlsx Sheet1 A1 E1 --bold                  # bold header row
+xl format-range report.xlsx Sheet1 B2 E10 --number-format "0.0000"  # 4dp on vol data
+xl format-range report.xlsx Sheet1 A1 A10 --bg-color FFFFD0         # yellow first column
+```
+
+Accepts the same options as `format-cell`.
+
+**Errors:** file not found, sheet not found, inverted range.
+
+---
+
+### `xl freeze-panes <file> <sheet> <frozen-rows> <frozen-cols>`
+
+Freeze rows from the top and/or columns from the left. `frozen-rows=1` freezes the header row; `frozen-cols=0` leaves
+columns unfrozen.
+
+```bash
+xl freeze-panes vol-surface.xlsx AAPL 1 0   # freeze header row only
+xl freeze-panes vol-surface.xlsx AAPL 1 1   # freeze header row and strike column
+```
+
+**Errors:** file not found, sheet not found, negative counts.
+
+---
+
+### `xl batch <file>`
+
+Apply multiple operations to a workbook in a single file open/save cycle — typically 10–50× faster than individual
+commands for bulk writes + formatting. Reads one operation per line from stdin. Lines starting with `#` and blank lines
+are ignored.
+
+```bash
+xl batch vol-surface.xlsx << 'EOF'
+# write data
+write AAPL A1 strike
+write AAPL A2 700
+write AAPL A3 800
+# format header row bold with blue background
+format-range AAPL A1 D1 --bold --bg-color 4472C4 --font-color FFFFFF
+# 4dp on vol cells
+format-range AAPL B2 D4 --number-format 0.0000
+# freeze header row
+freeze-panes AAPL 1 0
+# green tab for live sheet
+tab-color AAPL 70AD47
+EOF
+```
+
+**Supported batch operations:**
+
+| Operation      | Syntax                                                                                                     |
+|----------------|------------------------------------------------------------------------------------------------------------|
+| `write`        | `write <sheet> <cell> <value> [--type TYPE]`                                                               |
+| `format-cell`  | `format-cell <sheet> <cell> [--bold] [--italic] [--number-format FMT] [--font-color HEX] [--bg-color HEX]` |
+| `format-range` | `format-range <sheet> <from> <to> [same options]`                                                          |
+| `freeze-panes` | `freeze-panes <sheet> <frozen-rows> <frozen-cols>`                                                         |
+| `tab-color`    | `tab-color <sheet> <hex>`                                                                                  |
+| `add-sheet`    | `add-sheet <name>`                                                                                         |
+
+Values with spaces can be double-quoted: `write Sheet1 A1 "Hello World"`.
+
+**Errors:** file not found; if any operation fails the entire batch is rolled back (file unchanged).
 
 ---
 

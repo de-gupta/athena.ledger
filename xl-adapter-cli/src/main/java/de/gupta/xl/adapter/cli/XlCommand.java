@@ -51,7 +51,11 @@ public final class XlCommand implements Runnable
 				.addSubcommand(new RangeStatsCommand(facade))
 				.addSubcommand(new FindRowCommand(facade))
 				.addSubcommand(new DimsCommand(facade))
-				.addSubcommand(new ExportCsvCommand(facade));
+				.addSubcommand(new ExportCsvCommand(facade))
+				.addSubcommand(new FormatCellCommand(facade))
+				.addSubcommand(new FormatRangeCommand(facade))
+				.addSubcommand(new FreezePanesCommand(facade))
+				.addSubcommand(new BatchCommand(facade));
 	}
 
 	@Override

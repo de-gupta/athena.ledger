@@ -1,10 +1,7 @@
 package de.gupta.xl.application.port.in;
 
 import de.gupta.aletheia.trials.Fallible;
-import de.gupta.xl.application.transfer.RangeStats;
-import de.gupta.xl.application.transfer.SheetSummary;
-import de.gupta.xl.application.transfer.WriteCellRequest;
-import de.gupta.xl.application.transfer.WriteRangeRequest;
+import de.gupta.xl.application.transfer.*;
 import de.gupta.xl.domain.CellGrid;
 import de.gupta.xl.domain.CellValue;
 
@@ -71,4 +68,12 @@ public interface XlFacade
 	Fallible<String> dims(Path file, String sheet);
 
 	Fallible<Void> exportCsv(Path xlFile, String sheet, Path csvFile, char delimiter);
+
+	Fallible<Void> formatCell(Path file, String sheet, String cellRef, CellFormat format);
+
+	Fallible<Void> formatRange(Path file, String sheet, String fromCell, String toCell, CellFormat format);
+
+	Fallible<Void> freezePanes(Path file, String sheet, int frozenRows, int frozenColumns);
+
+	Fallible<Void> batch(Path file, List<BatchOperation> operations);
 }

@@ -782,6 +782,120 @@ final class CliITCase
 		}
 	}
 
+	@Nested
+	@DisplayName("format-cell and format-range")
+	final class Formatting
+	{
+		@Test
+		@DisplayName("format-cell exits 0 and preserves cell data")
+		void formatCellExits0AndPreservesCellData()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "header");
+
+			assertThat(execute("format-cell", file.toString(), "Sheet1", "A1", "--bold"))
+					.as("exit code").isZero();
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A1"))
+					.as("data preserved").isEqualTo("STR:header");
+		}
+
+		@Test
+		@DisplayName("format-range exits 0 and preserves all cell data")
+		void formatRangeExits0AndPreservesAllCellData()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "Name");
+			execute("write", file.toString(), "Sheet1", "B1", "Score");
+
+			assertThat(execute("format-range", file.toString(), "Sheet1", "A1", "B1", "--bold"))
+					.as("exit code").isZero();
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A1")).isEqualTo("STR:Name");
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "B1")).isEqualTo("STR:Score");
+		}
+
+		@Test
+		@DisplayName("number format option is accepted")
+		void numberFormatOptionIsAccepted()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "B2", "42.5");
+
+			assertThat(execute("format-cell", file.toString(), "Sheet1", "B2",
+					"--number-format", "0.0000")).as("exit code").isZero();
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "B2"))
+					.as("value unchanged").isEqualTo("NUM:42.5");
+		}
+	}
+
+	@Nested
+	@DisplayName("freeze-panes")
+	final class FreezePanes
+	{
+		@Test
+		@DisplayName("exits 0 and workbook remains readable")
+		void exits0AndWorkbookRemainsReadable()
+		{
+			execute("create", file.toString());
+			execute("write", file.toString(), "Sheet1", "A1", "header");
+
+			assertThat(execute("freeze-panes", file.toString(), "Sheet1", "1", "0"))
+					.as("exit code").isZero();
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A1"))
+					.as("data after freeze").isEqualTo("STR:header");
+		}
+	}
+
+	@Nested
+	@DisplayName("batch")
+	final class Batch
+	{
+		@Test
+		@DisplayName("applies all operations and results are readable")
+		void appliesAllOperationsAndResultsAreReadable()
+		{
+			execute("create", file.toString());
+			var script = String.join("\n",
+					"write Sheet1 A1 Name",
+					"write Sheet1 B1 Score",
+					"write Sheet1 A2 Alice",
+					"write Sheet1 B2 95",
+					"format-range Sheet1 A1 B1 --bold",
+					"freeze-panes Sheet1 1 0"
+			);
+			executeWithStdin(script, "batch", file.toString());
+
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A1")).isEqualTo("STR:Name");
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "B2")).isEqualTo("NUM:95.0");
+		}
+
+		@Test
+		@DisplayName("20 writes in one batch opens file only once")
+		void twentyWritesInOneBatchProducesCorrectResults()
+		{
+			execute("create", file.toString());
+			var lines = new StringBuilder();
+			for (var i = 1; i <= 20; i++)
+			{
+				lines.append("write Sheet1 A").append(i).append(" ").append(i).append("\n");
+			}
+			executeWithStdin(lines.toString(), "batch", file.toString());
+
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A10")).isEqualTo("NUM:10.0");
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A20")).isEqualTo("NUM:20.0");
+		}
+
+		@Test
+		@DisplayName("batch with comments and blank lines is valid")
+		void batchWithCommentsAndBlankLinesIsValid()
+		{
+			execute("create", file.toString());
+			var script = "# this is a comment\n\nwrite Sheet1 A1 hello\n\n# another comment";
+			executeWithStdin(script, "batch", file.toString());
+
+			assertThat(captureOutput("read", file.toString(), "Sheet1", "A1")).isEqualTo("STR:hello");
+		}
+	}
+
 	private int executeWithStdin(final String stdinContent, final String... arguments)
 	{
 		var originalIn = System.in;

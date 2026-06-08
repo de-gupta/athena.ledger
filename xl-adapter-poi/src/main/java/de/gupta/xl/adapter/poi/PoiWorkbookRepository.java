@@ -1,6 +1,8 @@
 package de.gupta.xl.adapter.poi;
 
 import de.gupta.xl.application.port.out.WorkbookRepository;
+import de.gupta.xl.application.transfer.BatchOperation;
+import de.gupta.xl.application.transfer.CellFormat;
 import de.gupta.xl.domain.*;
 import de.gupta.xl.domain.exception.EmptySheetException;
 import de.gupta.xl.domain.exception.WorkbookNotFoundException;
@@ -723,6 +725,219 @@ public final class PoiWorkbookRepository implements WorkbookRepository
 			log.error("Failed to compute dims for workbook: {}", file, caught);
 			throw new IllegalStateException("Failed to compute dims for workbook: " + file, caught);
 		}
+	}
+
+	@Override
+	public void formatCell(final Path file, final String sheet,
+	                       final CellReference reference, final CellFormat format)
+	{
+		modifyWorkbook(file, workbook ->
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return;
+			}
+			var row = poiSheet.getRow(reference.rowIndex());
+			if (row == null)
+			{
+				row = poiSheet.createRow(reference.rowIndex());
+			}
+			var cell = row.getCell(reference.columnIndex());
+			if (cell == null)
+			{
+				cell = row.createCell(reference.columnIndex());
+			}
+			applyFormatToCell(workbook, cell, format);
+		});
+	}
+
+	@Override
+	public void formatRange(final Path file, final String sheet,
+	                        final CellRangeReference range, final CellFormat format)
+	{
+		modifyWorkbook(file, workbook ->
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet == null)
+			{
+				return;
+			}
+			var sharedStyle = buildStyle(workbook, null, format);
+			for (var rowOffset = 0; rowOffset < range.rowCount(); rowOffset++)
+			{
+				final var rowIndex = range.topLeft().rowIndex() + rowOffset;
+				var row = Objects.requireNonNullElseGet(
+						poiSheet.getRow(rowIndex), () -> poiSheet.createRow(rowIndex));
+				for (var colOffset = 0; colOffset < range.columnCount(); colOffset++)
+				{
+					final var colIndex = range.topLeft().columnIndex() + colOffset;
+					var cell = Objects.requireNonNullElseGet(
+							row.getCell(colIndex), () -> row.createCell(colIndex));
+					cell.setCellStyle(sharedStyle);
+				}
+			}
+		});
+	}
+
+	@Override
+	public void freezePanes(final Path file, final String sheet, final int frozenRows, final int frozenColumns)
+	{
+		modifyWorkbook(file, workbook ->
+		{
+			var poiSheet = workbook.getSheet(sheet);
+			if (poiSheet != null)
+			{
+				poiSheet.createFreezePane(frozenColumns, frozenRows);
+			}
+		});
+	}
+
+	@Override
+	public void batch(final Path file, final List<BatchOperation> operations)
+	{
+		modifyWorkbook(file, workbook ->
+		{
+			for (var operation : operations)
+			{
+				switch (operation)
+				{
+					case BatchOperation.WriteCell(var sheet, var cellRef, var value) ->
+					{
+						var poiSheet = Objects.requireNonNullElseGet(
+								workbook.getSheet(sheet), () -> workbook.createSheet(sheet));
+						var ref = CellReference.of(cellRef);
+						final var rowIdx = ref.rowIndex();
+						var row = Objects.requireNonNullElseGet(
+								poiSheet.getRow(rowIdx), () -> poiSheet.createRow(rowIdx));
+						var cell = Objects.requireNonNullElseGet(
+								row.getCell(ref.columnIndex()), () -> row.createCell(ref.columnIndex()));
+						applyCellValue(workbook, cell, value);
+					}
+					case BatchOperation.FormatCell(var sheet, var cellRef, var format) ->
+					{
+						var poiSheet = workbook.getSheet(sheet);
+						if (poiSheet != null)
+						{
+							var ref = CellReference.of(cellRef);
+							final var rowIdx = ref.rowIndex();
+							var row = Objects.requireNonNullElseGet(
+									poiSheet.getRow(rowIdx), () -> poiSheet.createRow(rowIdx));
+							var cell = Objects.requireNonNullElseGet(
+									row.getCell(ref.columnIndex()), () -> row.createCell(ref.columnIndex()));
+							applyFormatToCell(workbook, cell, format);
+						}
+					}
+					case BatchOperation.FormatRange(var sheet, var fromCell, var toCell, var format) ->
+					{
+						var poiSheet = workbook.getSheet(sheet);
+						if (poiSheet != null)
+						{
+							var range = CellRangeReference.of(fromCell, toCell);
+							var sharedStyle = buildStyle(workbook, null, format);
+							for (var rowOffset = 0; rowOffset < range.rowCount(); rowOffset++)
+							{
+								final var rowIndex = range.topLeft().rowIndex() + rowOffset;
+								var row = Objects.requireNonNullElseGet(
+										poiSheet.getRow(rowIndex), () -> poiSheet.createRow(rowIndex));
+								for (var colOffset = 0; colOffset < range.columnCount(); colOffset++)
+								{
+									final var colIndex = range.topLeft().columnIndex() + colOffset;
+									var cell = Objects.requireNonNullElseGet(
+											row.getCell(colIndex), () -> row.createCell(colIndex));
+									cell.setCellStyle(sharedStyle);
+								}
+							}
+						}
+					}
+					case BatchOperation.FreezePanes(var sheet, var rows, var cols) ->
+					{
+						var poiSheet = workbook.getSheet(sheet);
+						if (poiSheet != null)
+						{
+							poiSheet.createFreezePane(cols, rows);
+						}
+					}
+					case BatchOperation.SetTabColor(var sheet, var hexRgb) ->
+					{
+						var poiSheet = workbook.getSheet(sheet);
+						if (poiSheet != null)
+						{
+							var color = de.gupta.xl.domain.TabColor.of(hexRgb);
+							poiSheet.setTabColor(new org.apache.poi.xssf.usermodel.XSSFColor(
+									new byte[]{(byte) color.red(), (byte) color.green(), (byte) color.blue()}, null));
+						}
+					}
+					case BatchOperation.AddSheet(var sheetName) ->
+					{
+						if (workbook.getSheetIndex(sheetName) < 0)
+						{
+							workbook.createSheet(sheetName);
+						}
+					}
+				}
+			}
+		});
+	}
+
+	private static void applyFormatToCell(final XSSFWorkbook workbook,
+	                                      final Cell cell, final CellFormat format)
+	{
+		var existing = (org.apache.poi.xssf.usermodel.XSSFCellStyle) cell.getCellStyle();
+		var newStyle = buildStyle(workbook, existing, format);
+		cell.setCellStyle(newStyle);
+	}
+
+	private static org.apache.poi.xssf.usermodel.XSSFCellStyle buildStyle(
+			final XSSFWorkbook workbook,
+			final org.apache.poi.xssf.usermodel.XSSFCellStyle base,
+			final CellFormat format)
+	{
+		var style = workbook.createCellStyle();
+		if (base != null)
+		{
+			style.cloneStyleFrom(base);
+		}
+		if (format.numberFormat() != null)
+		{
+			var dataFormat = workbook.getCreationHelper().createDataFormat();
+			style.setDataFormat(dataFormat.getFormat(format.numberFormat()));
+		}
+		if (format.bold() != null || format.italic() != null
+				|| format.fontColorHex() != null)
+		{
+			var baseFont = base != null
+					? base.getFont()
+					: workbook.getFontAt(0);
+			var font = workbook.createFont();
+			font.setBold(Boolean.TRUE.equals(format.bold()) || baseFont.getBold());
+			font.setItalic(Boolean.TRUE.equals(format.italic()) || baseFont.getItalic());
+			font.setFontHeight(baseFont.getFontHeight());
+			font.setFontName(baseFont.getFontName());
+			if (format.fontColorHex() != null)
+			{
+				var colorBytes = hexToBytes(format.fontColorHex());
+				font.setColor(new org.apache.poi.xssf.usermodel.XSSFColor(colorBytes, null));
+			}
+			style.setFont(font);
+		}
+		if (format.backgroundColorHex() != null)
+		{
+			var colorBytes = hexToBytes(format.backgroundColorHex());
+			style.setFillForegroundColor(new org.apache.poi.xssf.usermodel.XSSFColor(colorBytes, null));
+			style.setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
+		}
+		return style;
+	}
+
+	private static byte[] hexToBytes(final String hexRgb)
+	{
+		var normalized = hexRgb.startsWith("#") ? hexRgb.substring(1) : hexRgb;
+		return new byte[]{
+				(byte) Integer.parseInt(normalized.substring(0, 2), 16),
+				(byte) Integer.parseInt(normalized.substring(2, 4), 16),
+				(byte) Integer.parseInt(normalized.substring(4, 6), 16)
+		};
 	}
 
 	private void writeColumnValues(final XSSFWorkbook workbook,
