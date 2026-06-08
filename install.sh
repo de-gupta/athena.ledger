@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
-~/.claude/scripts/mvn-clean-build.sh
+mvn clean install -DskipTests -q \
+    -Dmaven.javadoc.skip=true \
+    -Dmaven.source.skip=true \
+    -Dgpg.skip=true \
+    -Denforcer.skip=true
 mkdir -p ~/.local/lib/xl
 cp xl-assembly/target/xl-assembly-*-SNAPSHOT.jar ~/.local/lib/xl/xl.jar 2>/dev/null || \
   cp xl-assembly/target/xl-assembly-*.jar ~/.local/lib/xl/xl.jar
